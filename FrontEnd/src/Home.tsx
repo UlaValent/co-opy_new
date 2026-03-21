@@ -29,6 +29,8 @@ import { useNavigate } from 'react-router-dom';
  */
 function Home() {
   const navigate = useNavigate();
+  const session = getAuthSession();
+  const isAuthenticated = !!session;
   // Modal state management using custom hook
   const {
     openModal,          // Currently open modal type
@@ -78,36 +80,23 @@ function Home() {
     openJoinModal();
   };
 
+  const goToAuth = () => {
+    navigate('/auth', { state: { from: '/' } });
+  };
+
   return (
     <BackgroundLayers>
       {/* Floating controls (sound toggle, settings) */}
       <FloatingControls />
-
-      <button
-        type="button"
-        onClick={() => navigate('/auth', { state: { from: '/' } })}
-        style={{
-          position: 'absolute',
-          top: '16px',
-          left: '16px',
-          zIndex: 5,
-          fontFamily: "'Jersey 25', sans-serif",
-          fontSize: '24px',
-          borderRadius: '12px',
-          border: '2px solid #b55d00',
-          background: 'rgba(255, 232, 188, 0.95)',
-          color: '#7a2500',
-          padding: '8px 12px'
-        }}
-      >
-        {getAuthSession() ? 'Manage Account' : 'Login / Register'}
-      </button>
       
       {/* Main content area with logo and buttons */}
       <MainContent
         onCreateRoom={handleCreateRoom}    // Handler for create room button
         onJoinRoom={handleJoinRoom}        // Handler for join room button
         onChooseAvatar={openChooseModal}  // Handler for avatar selection button
+        onAuthNavigate={goToAuth}
+        onManageAccount={goToAuth}
+        isAuthenticated={isAuthenticated}
       />
 
       {authMessage && (

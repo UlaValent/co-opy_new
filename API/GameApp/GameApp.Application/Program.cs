@@ -120,6 +120,26 @@ builder.Services
                 }
 
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var accountIdClaim = context.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                var tokenVersionClaim = context.Principal?.FindFirst("token_version")?.Value;
+                if (!Guid.TryParse(accountIdClaim, out var accountId) ||
+                    !int.TryParse(tokenVersionClaim, out var tokenVersionFromToken))
+                {
+                    context.Fail("Invalid token claims.");
+                    return Task.CompletedTask;
+                }
+
+                var accounts = context.HttpContext.RequestServices.GetRequiredService<IAccountRepository>();
+                var account = accounts.GetById(accountId);
+                if (account is null || account.TokenVersion != tokenVersionFromToken)
+                {
+                    context.Fail("Token no longer valid.");
+                }
+
+                return Task.CompletedTask;
             }
         };
 

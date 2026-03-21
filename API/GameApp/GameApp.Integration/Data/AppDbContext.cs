@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
     public DbSet<Lobby> Lobbies => Set<Lobby>();
     public DbSet<Player> Players => Set<Player>();
     public DbSet<Account> Accounts => Set<Account>();
+    public DbSet<RefreshTokenSession> RefreshTokenSessions => Set<RefreshTokenSession>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,5 +39,16 @@ public class AppDbContext : DbContext
         account.Property(a => a.PasswordHash).IsRequired().HasMaxLength(512);
         account.HasIndex(a => a.Username).IsUnique();
         account.HasIndex(a => a.Email).IsUnique();
+        account.HasMany(a => a.RefreshTokenSessions)
+            .WithOne(s => s.Account)
+            .HasForeignKey(s => s.AccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var refreshSession = modelBuilder.Entity<RefreshTokenSession>();
+        refreshSession.HasKey(s => s.Id);
+        refreshSession.Property(s => s.TokenHash).IsRequired().HasMaxLength(128);
+        refreshSession.Property(s => s.RevocationReason).HasMaxLength(128);
+        refreshSession.HasIndex(s => s.TokenHash).IsUnique();
+        refreshSession.HasIndex(s => new { s.AccountId, s.RevokedAtUtc });
     }
 }

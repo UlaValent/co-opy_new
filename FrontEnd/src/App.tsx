@@ -13,6 +13,7 @@ import { lazy, Suspense } from 'react'
 // lazy load components to reduce initial bundle size
 // this means components are only loaded when the user navigates to them
 const Home = lazy(() => import('./Home')) // landing page with room creation/joining
+const AuthPage = lazy(() => import('./AuthPage')) // full-page login/register and session management
 const DrawingPage = lazy(() => import('./DrawingPage')) // main drawing game interface
 const Lobby = lazy(() => import('./components/Lobby')) // lobby UI for create/join / role assignment
 const DescriberPage = lazy(() => import('./DescriberPage')) // describer view (file: src/DescriberPage.tsx)
@@ -28,6 +29,9 @@ function App() {
                     <Routes>
                         {/* Home page route - landing page */}
                         <Route path="/" element={<Home />} />
+
+                        {/* Auth route - dedicated login/register page */}
+                        <Route path="/auth" element={<AuthPage />} />
 
                         {/* Lobby route - quick access to lobby UI for testing */}
                         <Route path="/lobby" element={<Lobby />} />

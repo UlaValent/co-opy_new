@@ -1,4 +1,4 @@
-import { getAuthToken } from "./authSession";
+import { getValidAccessToken } from "./authApi";
 
 const API_URL = (import.meta.env.VITE_API_URL as string) ?? "https://localhost:7179";
 
@@ -19,7 +19,7 @@ export interface ImageDto {
 }
 
 export async function joinLobby(request: JoinRequest): Promise<{ ok: boolean; lobbyCode?: string; message?: string }> {
-    const token = getAuthToken();
+    const token = await getValidAccessToken();
     if (!token) return { ok: false, message: "You must be authenticated." };
 
     const res = await fetch(`${API_URL}/lobby/join`, {
@@ -50,7 +50,7 @@ export async function joinLobby(request: JoinRequest): Promise<{ ok: boolean; lo
 }
 
 export async function getLobbyImage(lobbyId: string): Promise<ImageDto | null> {
-    const token = getAuthToken();
+    const token = await getValidAccessToken();
     if (!token) return null;
 
     const res = await fetch(`${API_URL}/lobby/${encodeURIComponent(lobbyId)}/image`, {
@@ -66,7 +66,7 @@ export async function getLobbyImage(lobbyId: string): Promise<ImageDto | null> {
  * Returns array of player names or null on failure.
  */
 export async function getLobbyPlayers(lobbyId: string): Promise<string[] | null> {
-    const token = getAuthToken();
+    const token = await getValidAccessToken();
     if (!token) return null;
 
     const res = await fetch(`${API_URL}/lobby/${encodeURIComponent(lobbyId)}/players`, {

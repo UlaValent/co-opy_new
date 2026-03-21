@@ -7,4 +7,7 @@ public class Account
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public DateTime CreatedAtUtc { get; init; } = DateTime.UtcNow;
+    public int TokenVersion { get; set; }
+
+    public ICollection<RefreshTokenSession> RefreshTokenSessions { get; set; } = new List<RefreshTokenSession>();
 }

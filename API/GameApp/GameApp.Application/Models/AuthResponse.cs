@@ -4,6 +4,8 @@ public sealed class AuthResponse
 {
     public string Token { get; init; } = string.Empty;
     public DateTime ExpiresAtUtc { get; init; }
+    public string RefreshToken { get; init; } = string.Empty;
+    public DateTime RefreshTokenExpiresAtUtc { get; init; }
     public AccountResponse Account { get; init; } = new();
 }
 

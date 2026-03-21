@@ -7,6 +7,8 @@ export interface AccountInfo {
 export interface AuthSession {
     token: string;
     expiresAtUtc: string;
+    refreshToken: string;
+    refreshTokenExpiresAtUtc: string;
     account: AccountInfo;
 }
 
@@ -18,10 +20,14 @@ export function getAuthSession(): AuthSession | null {
 
     try {
         const parsed = JSON.parse(raw) as AuthSession;
-        if (!parsed.token || !parsed.account?.username || !parsed.expiresAtUtc) return null;
+        if (!parsed.token ||
+            !parsed.refreshToken ||
+            !parsed.account?.username ||
+            !parsed.expiresAtUtc ||
+            !parsed.refreshTokenExpiresAtUtc) return null;
 
-        const expiresAtMs = Date.parse(parsed.expiresAtUtc);
-        if (Number.isNaN(expiresAtMs) || expiresAtMs <= Date.now()) {
+        const refreshExpiresAtMs = Date.parse(parsed.refreshTokenExpiresAtUtc);
+        if (Number.isNaN(refreshExpiresAtMs) || refreshExpiresAtMs <= Date.now()) {
             localStorage.removeItem(SESSION_KEY);
             return null;
         }
@@ -43,6 +49,18 @@ export function clearAuthSession(): void {
 
 export function getAuthToken(): string | null {
     return getAuthSession()?.token ?? null;
+}
+
+export function isAccessTokenExpired(session: AuthSession, skewSeconds = 20): boolean {
+    const expiresAtMs = Date.parse(session.expiresAtUtc);
+    if (Number.isNaN(expiresAtMs)) return true;
+    return expiresAtMs <= Date.now() + skewSeconds * 1000;
+}
+
+export function isRefreshTokenExpired(session: AuthSession): boolean {
+    const refreshExpiresAtMs = Date.parse(session.refreshTokenExpiresAtUtc);
+    if (Number.isNaN(refreshExpiresAtMs)) return true;
+    return refreshExpiresAtMs <= Date.now();
 }
 
 export function isAuthenticated(): boolean {

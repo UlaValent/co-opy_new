@@ -1,5 +1,5 @@
 import * as signalR from "@microsoft/signalr";
-import { getAuthToken } from "./authSession";
+import { getValidAccessToken } from "./authApi";
 
 const API_URL = (import.meta.env.VITE_API_URL as string) ?? "https://localhost:7179";
 
@@ -56,7 +56,7 @@ class LobbyHubClient {
         if (!this.connection) {
             this.connection = new signalR.HubConnectionBuilder()
                 .withUrl(`${API_URL}/hubs/lobby`, {
-                    accessTokenFactory: () => getAuthToken() ?? ""
+                    accessTokenFactory: async () => (await getValidAccessToken()) ?? ""
                 })
                 .withAutomaticReconnect()
                 .build();
@@ -241,7 +241,7 @@ class LobbyHubClient {
             method: 'POST',
             body: fd,
             headers: {
-                Authorization: `Bearer ${getAuthToken() ?? ''}`
+                Authorization: `Bearer ${(await getValidAccessToken()) ?? ''}`
             }
         });
 

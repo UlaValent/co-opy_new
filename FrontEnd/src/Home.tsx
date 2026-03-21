@@ -11,12 +11,12 @@ import BackgroundLayers from './components/BackgroundLayers';
 import MainContent from './components/MainContent';
 import FloatingControls from './components/FloatingControls';
 import ModalManager from './components/ModalManager';
-import AuthPanel from './components/AuthPanel';
 import { useModalManager } from './hooks/useModalManager';
 import { homeStyles } from './styles/homeStyles';
 import { useEffect, useState } from 'react';
 import { useLobbyName } from './hooks/useLobbyName';
 import { getAuthSession } from './services/authSession';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Home page component with modal management
@@ -28,6 +28,7 @@ import { getAuthSession } from './services/authSession';
  * - Modal system for room creation, joining, and avatar selection
  */
 function Home() {
+  const navigate = useNavigate();
   // Modal state management using custom hook
   const {
     openModal,          // Currently open modal type
@@ -54,7 +55,8 @@ function Home() {
   const ensureAuthenticated = async (): Promise<boolean> => {
     const session = getAuthSession();
     if (!session) {
-      setAuthMessage('Login or register before creating/joining a room.');
+      setAuthMessage('Please login or register first.');
+      navigate('/auth', { state: { from: '/' } });
       return false;
     }
 
@@ -76,25 +78,30 @@ function Home() {
     openJoinModal();
   };
 
-  const handleAuthenticated = async (username: string) => {
-    await setName(username);
-    setAuthMessage('');
-  };
-
-  const handleLoggedOut = async () => {
-    await setName('');
-    setAuthMessage('');
-  };
-
   return (
     <BackgroundLayers>
       {/* Floating controls (sound toggle, settings) */}
       <FloatingControls />
 
-      <AuthPanel
-        onAuthenticated={handleAuthenticated}
-        onLoggedOut={handleLoggedOut}
-      />
+      <button
+        type="button"
+        onClick={() => navigate('/auth', { state: { from: '/' } })}
+        style={{
+          position: 'absolute',
+          top: '16px',
+          left: '16px',
+          zIndex: 5,
+          fontFamily: "'Jersey 25', sans-serif",
+          fontSize: '24px',
+          borderRadius: '12px',
+          border: '2px solid #b55d00',
+          background: 'rgba(255, 232, 188, 0.95)',
+          color: '#7a2500',
+          padding: '8px 12px'
+        }}
+      >
+        {getAuthSession() ? 'Manage Account' : 'Login / Register'}
+      </button>
       
       {/* Main content area with logo and buttons */}
       <MainContent

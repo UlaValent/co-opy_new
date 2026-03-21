@@ -9,6 +9,7 @@
 import {useState, useEffect, useRef} from 'react';
 import type { ChatMessage, Player } from '../types/drawingTypes';
 import LobbyHubClient from '../services/lobbyHub';
+import { getValidAccessToken } from '../services/authApi';
 
 /**
  * Hook for managing drawing game state
@@ -211,9 +212,13 @@ export function useDrawingState(
             await LobbyHubClient.addPlayerToLobby(lobbyId, currentPlayerName, currentAvatarId);
 
             // Fetch actual player list from REST API to get correct iconIds
+            const token = await getValidAccessToken();
             const playersResponse = await fetch(`${import.meta.env.VITE_API_URL || 'https://localhost:7179'}/lobby/${lobbyId}/players`, {
               method: 'GET',
-              credentials: 'include'
+              credentials: 'include',
+              headers: {
+                'Authorization': `Bearer ${token || ''}`
+              }
             });
 
             if (playersResponse.ok) {

@@ -10,6 +10,7 @@ import lobbyHub from './services/lobbyHub';
 import './styles/DrawingPage.css';
 import { useLobbyName } from './hooks/useLobbyName';
 import FinalLeftDrawing from './components/FinalLeftDrawing';
+import { getValidAccessToken } from './services/authApi';
 
 const API_URL = (import.meta.env.VITE_API_URL as string) ?? 'https://localhost:7179';
 const FRAME_SIZE = 700;
@@ -23,10 +24,20 @@ type ComparisonResult = {
 
 const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+async function authHeaders(extra?: Record<string, string>) {
+  const token = await getValidAccessToken();
+  return {
+    ...(extra ?? {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 export default function FinalPage() {
   const lobbyId = sessionStorage.getItem('lobbyId') || '';
   const { name: username } = useLobbyName(''); 
   const navigate = useNavigate();
+
+  const [localDrawingPreviewUrl, setLocalDrawingPreviewUrl] = useState<string | null>(null);
 
   useDrawingState(lobbyId, username);
 
@@ -99,10 +110,13 @@ export default function FinalPage() {
 
   const fetchLatestDrawingUrl = async (): Promise<string | null> => {
     try {
-      const resp = await fetch(`${API_URL}/api/drawings/latest`);
+      const resp = await fetch(`${API_URL}/api/drawings/latest`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: await authHeaders(),
+      });
       if (!resp.ok) return null;
       const body = await resp.json();
-      // return server-relative path (raw) — do not convert to absolute here
       if (body?.url) return body.url;
       return null;
     } catch {
@@ -140,12 +154,13 @@ export default function FinalPage() {
 
       const resp = await fetch(`${API_URL}/api/drawings`, {
         method: 'POST',
-        body: form
+        body: form,
+        credentials: 'include',
+        headers: await authHeaders(),
       });
 
       if (!resp.ok) return null;
       const body = await resp.json();
-      // return server-relative path (body.url), caller will convert to absolute only for display
       if (body?.url) return body.url;
       return null;
     } catch {
@@ -168,6 +183,12 @@ export default function FinalPage() {
 
         if (blob) {
           // fetch original image as blob (use absolute for display)
+          const objectUrl = URL.createObjectURL(blob);
+          if (mounted) {
+            setLocalDrawingPreviewUrl(objectUrl);
+            setDrawingUrl(objectUrl);
+          }
+          
           let originalBlob: Blob | null = null;
           if (imageUrl) {
             try {
@@ -197,7 +218,9 @@ export default function FinalPage() {
 
             const resp = await fetch(`${API_URL}/comparison/upload`, {
               method: 'POST',
-              body: form
+              body: form,
+              credentials: 'include',
+              headers: await authHeaders(),
             });
 
             if (!resp.ok) {
@@ -238,7 +261,8 @@ export default function FinalPage() {
 
         const resp2 = await fetch(`${API_URL}/comparison`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          headers: await authHeaders({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({ ImagePathA: sendA, ImagePathB: sendB })
         });
 
@@ -259,6 +283,12 @@ export default function FinalPage() {
     runComparison();
     return () => { mounted = false; };
   }, [imageUrl, imagePathRaw, drawingPathRaw, toAbsoluteUrl]);
+
+    useEffect(() => {
+    return () => {
+      if (localDrawingPreviewUrl) URL.revokeObjectURL(localDrawingPreviewUrl);
+    };
+  }, [localDrawingPreviewUrl]);
 
   const scale = 0.7;
   const scaledStyle: React.CSSProperties = useMemo(() => ({
@@ -287,13 +317,21 @@ export default function FinalPage() {
           <div className="main-content" style={{ alignItems: 'flex-start' }}>
             <div className="canvas-container" style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
               <div className="frame-stack" style={{ width: FRAME_SIZE }}>
-                <div className="frame-label frame-label--abs">Drawing</div>
-                <div style={frameBoxStyle}>
-                    <aside className="left-square">
+                  <div className="frame-label frame-label--abs">Drawing</div>
+                  <div style={frameBoxStyle}>
+                    {(localDrawingPreviewUrl || drawingUrl) ? (
+                      <img
+                        src={localDrawingPreviewUrl || drawingUrl || ''}
+                        alt="Drawing"
+                        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', background: '#fff' }}
+                      />
+                    ) : (
+                      <aside className="left-square">
                         <FinalLeftDrawing />
-                    </aside>
+                      </aside>
+                    )}
+                  </div>
                 </div>
-              </div>
 
               <div className="frame-stack" style={{ width: FRAME_SIZE }}>
                 <div className="frame-label frame-label--abs">Original</div>

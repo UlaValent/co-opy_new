@@ -345,12 +345,17 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         try {
           const stage = stageRef.current;
           if (!stage) return;
-          // produce PNG data URL
           const dataUrl = stage.toDataURL({ mimeType: 'image/png', quality: 1 });
-          // best-effort upload; pass lobbyId so hub can broadcast the created URL
-          await lobbyHub.uploadDataUrlToDrawings(dataUrl, lobbyId).catch((err) => {
-            console.warn('[Canvas] auto-upload failed', err);
-          });
+          
+          try {
+            await lobbyHub.uploadDataUrlToDrawings(dataUrl, lobbyId).catch((err) => {
+              console.error('[Canvas] auto-upload failed:', err);
+              alert(`Upload failed: ${err.message}`);
+              throw err;
+            });
+          } catch (uploadErr) {
+            console.error('[Canvas] upload error details:', uploadErr);
+          }
         } catch (err) {
           console.warn('[Canvas] auto-upload error', err);
         }

@@ -1,3 +1,5 @@
+import { getAuthToken } from "./authSession";
+
 const API_URL = (import.meta.env.VITE_API_URL as string) ?? "https://localhost:7179";
 
 export interface JoinRequest {
@@ -17,11 +19,16 @@ export interface ImageDto {
 }
 
 export async function joinLobby(request: JoinRequest): Promise<{ ok: boolean; lobbyCode?: string; message?: string }> {
+    const token = getAuthToken();
+    if (!token) return { ok: false, message: "You must be authenticated." };
+
     const res = await fetch(`${API_URL}/lobby/join`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(request),
-        credentials: "include",
     });
 
     if (!res.ok) {
@@ -43,9 +50,12 @@ export async function joinLobby(request: JoinRequest): Promise<{ ok: boolean; lo
 }
 
 export async function getLobbyImage(lobbyId: string): Promise<ImageDto | null> {
+    const token = getAuthToken();
+    if (!token) return null;
+
     const res = await fetch(`${API_URL}/lobby/${encodeURIComponent(lobbyId)}/image`, {
         method: "GET",
-        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
     return (await res.json()) as ImageDto;
@@ -56,9 +66,12 @@ export async function getLobbyImage(lobbyId: string): Promise<ImageDto | null> {
  * Returns array of player names or null on failure.
  */
 export async function getLobbyPlayers(lobbyId: string): Promise<string[] | null> {
+    const token = getAuthToken();
+    if (!token) return null;
+
     const res = await fetch(`${API_URL}/lobby/${encodeURIComponent(lobbyId)}/players`, {
         method: "GET",
-        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) return null;
     try {

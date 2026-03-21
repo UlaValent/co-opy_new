@@ -1,4 +1,5 @@
 import * as signalR from "@microsoft/signalr";
+import { getAuthToken } from "./authSession";
 
 const API_URL = (import.meta.env.VITE_API_URL as string) ?? "https://localhost:7179";
 
@@ -54,7 +55,9 @@ class LobbyHubClient {
         // If there is an existing connection instance (Connecting/Reconnecting), reuse it.
         if (!this.connection) {
             this.connection = new signalR.HubConnectionBuilder()
-                .withUrl(`${API_URL}/hubs/lobby`)
+                .withUrl(`${API_URL}/hubs/lobby`, {
+                    accessTokenFactory: () => getAuthToken() ?? ""
+                })
                 .withAutomaticReconnect()
                 .build();
 
@@ -237,7 +240,9 @@ class LobbyHubClient {
         const resp = await fetch(`${API_URL}/api/drawings`, {
             method: 'POST',
             body: fd,
-            credentials: 'include'
+            headers: {
+                Authorization: `Bearer ${getAuthToken() ?? ''}`
+            }
         });
 
         if (!resp.ok) {

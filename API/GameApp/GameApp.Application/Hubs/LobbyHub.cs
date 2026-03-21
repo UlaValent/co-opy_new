@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using GameApp.Service.Dtos;
 using GameApp.Service.Models;
 using GameApp.Service.Services;
@@ -6,6 +8,7 @@ using GameApp.Service.Utils;
 
 namespace GameApp.Application.Hubs
 {
+    [Authorize]
     public class LobbyHub : Hub
     {
         private readonly ILobbyService _lobbyService;
@@ -21,11 +24,13 @@ namespace GameApp.Application.Hubs
 
         public async Task AddPlayerToLobby(string lobbyId, string playerName, int iconId)
         {
+            var authenticatedName = Context.User?.FindFirst(ClaimTypes.Name)?.Value ?? playerName;
+
             // add connection to SignalR group
             await Groups.AddToGroupAsync(Context.ConnectionId, lobbyId);
 
             // register or update player with their connection id in server-side lobby store
-            _lobbyService.AddOrUpdatePlayerConnection(lobbyId, playerName, iconId, Context.ConnectionId);
+            _lobbyService.AddOrUpdatePlayerConnection(lobbyId, authenticatedName, iconId, Context.ConnectionId);
 
             // Send current players state to the caller so new joiner sees existing players
             try
@@ -40,7 +45,7 @@ namespace GameApp.Application.Hubs
             }
 
             // notify group that a player joined (including the caller)
-            await Clients.Group(lobbyId).SendAsync("PlayerJoined", lobbyId, playerName, iconId);
+            await Clients.Group(lobbyId).SendAsync("PlayerJoined", lobbyId, authenticatedName, iconId);
         }
 
         public async Task SendLobbyMessage(string lobbyId, string message, string playerName, int iconId)

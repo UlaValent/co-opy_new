@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text.Json;
+using System.Text;
 using GameApp.Application.Hubs;
 using GameApp.Application.SignalR;
 using GameApp.Integration.Data;
@@ -10,8 +11,10 @@ using GameApp.Service.Services;
 using GameApp.Service.Utils;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -20,6 +23,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Bind options
 builder.Services.Configure<GalleryOptions>(builder.Configuration.GetSection("Gallery"));
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 
 // Read allowed origins early and store
 var allowedOrigins = builder.Environment.IsDevelopment()
@@ -97,6 +101,43 @@ builder.Services.AddSignalR(options =>
     }
 });
 
+var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey));
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/lobby"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = signingKey,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 // EF Core with the resolved path
 builder.Services.AddDbContextFactory<AppDbContext>(options =>
 {
@@ -113,6 +154,7 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 // Integration repositories
 builder.Services.AddScoped<ILobbyRepository, EfLobbyRepository>();
 builder.Services.AddScoped<IPlayerRepository, EfPlayerRepository>();
+builder.Services.AddScoped<IAccountRepository, EfAccountRepository>();
 builder.Services.AddSingleton<IGalleryRepository, FileSystemGalleryRepository>();
 
 // Service layer registrations
@@ -213,6 +255,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Health check endpoint with detailed response

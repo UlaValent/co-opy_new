@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using GameApp.Application.Hubs;
 using GameApp.Application.Requests;
 using GameApp.Application.Models;
@@ -11,6 +13,7 @@ namespace GameApp.Application.Controllers
 {
     [ApiController]
     [Route("lobby")]
+    [Authorize]
     public class LobbyController : ControllerBase
     {
         private readonly ILobbyService _lobbiesService;
@@ -25,11 +28,12 @@ namespace GameApp.Application.Controllers
         [HttpPost("join")]
         public async Task<IActionResult> JoinLobby([FromBody] LobbyJoinRequest request)
         {
+            var authenticatedName = User.FindFirstValue(ClaimTypes.Name) ?? request.Username;
             var lobbyId = request.LobbyId?.ToLower() ?? string.Empty;
             if (string.IsNullOrEmpty(lobbyId))
             {
                 var lobby = _lobbiesService.CreateLobby();
-                _lobbiesService.AddPlayer(new Player(request.Username, request.IconId), lobby.LobbyCode);
+                _lobbiesService.AddPlayer(new Player(authenticatedName, request.IconId), lobby.LobbyCode);
                 return Ok(new { lobby.LobbyCode });
             }
 
@@ -37,9 +41,9 @@ namespace GameApp.Application.Controllers
             {// join
                 try
                 {
-                    _lobbiesService.AddPlayer(new Player(request.Username, request.IconId), lobbyId);
-                    await _hubContext.Clients.Group(lobbyId).SendAsync("PlayerJoined", request.Username);
-                    return Ok(request.Username);
+                    _lobbiesService.AddPlayer(new Player(authenticatedName, request.IconId), lobbyId);
+                    await _hubContext.Clients.Group(lobbyId).SendAsync("PlayerJoined", authenticatedName);
+                    return Ok(authenticatedName);
                 }
                 catch (LobbyFullException)
                 {

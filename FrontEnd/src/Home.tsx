@@ -11,10 +11,12 @@ import BackgroundLayers from './components/BackgroundLayers';
 import MainContent from './components/MainContent';
 import FloatingControls from './components/FloatingControls';
 import ModalManager from './components/ModalManager';
+import AuthPanel from './components/AuthPanel';
 import { useModalManager } from './hooks/useModalManager';
 import { homeStyles } from './styles/homeStyles';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useLobbyName } from './hooks/useLobbyName';
+import { getAuthSession } from './services/authSession';
 
 /**
  * Home page component with modal management
@@ -38,24 +40,86 @@ function Home() {
     openChooseModal,    // Function to open avatar selection modal
   } = useModalManager();
 
-  const { setName } = useLobbyName('');
+  const { name, setName } = useLobbyName('');
+  const [authMessage, setAuthMessage] = useState('');
 
   useEffect(() => {
-    setName('');
+    const session = getAuthSession();
+    if (session?.account.username) {
+      setName(session.account.username);
+    }
     setSelectedAvatar(0);
   }, []);
+
+  const ensureAuthenticated = async (): Promise<boolean> => {
+    const session = getAuthSession();
+    if (!session) {
+      setAuthMessage('Login or register before creating/joining a room.');
+      return false;
+    }
+
+    if (!name?.trim()) {
+      await setName(session.account.username);
+    }
+
+    setAuthMessage('');
+    return true;
+  };
+
+  const handleCreateRoom = async () => {
+    if (!(await ensureAuthenticated())) return;
+    openCreateModal();
+  };
+
+  const handleJoinRoom = async () => {
+    if (!(await ensureAuthenticated())) return;
+    openJoinModal();
+  };
+
+  const handleAuthenticated = async (username: string) => {
+    await setName(username);
+    setAuthMessage('');
+  };
+
+  const handleLoggedOut = async () => {
+    await setName('');
+    setAuthMessage('');
+  };
 
   return (
     <BackgroundLayers>
       {/* Floating controls (sound toggle, settings) */}
       <FloatingControls />
+
+      <AuthPanel
+        onAuthenticated={handleAuthenticated}
+        onLoggedOut={handleLoggedOut}
+      />
       
       {/* Main content area with logo and buttons */}
       <MainContent
-        onCreateRoom={openCreateModal}    // Handler for create room button
-        onJoinRoom={openJoinModal}        // Handler for join room button
+        onCreateRoom={handleCreateRoom}    // Handler for create room button
+        onJoinRoom={handleJoinRoom}        // Handler for join room button
         onChooseAvatar={openChooseModal}  // Handler for avatar selection button
       />
+
+      {authMessage && (
+        <div style={{
+          position: 'absolute',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(140, 50, 0, 0.88)',
+          color: '#fff6dd',
+          padding: '8px 14px',
+          borderRadius: '12px',
+          fontFamily: "'Jersey 25', sans-serif",
+          fontSize: '24px',
+          zIndex: 5
+        }}>
+          {authMessage}
+        </div>
+      )}
       
       {/* Modal system for user interactions */}
       <ModalManager

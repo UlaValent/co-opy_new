@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using GameApp.Service.Options;
 
@@ -9,6 +10,7 @@ namespace GameApp.Application.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class DrawingsController : ControllerBase
 {
     private readonly string _drawingsRoot;

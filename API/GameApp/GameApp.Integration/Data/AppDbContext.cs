@@ -9,6 +9,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Lobby> Lobbies => Set<Lobby>();
     public DbSet<Player> Players => Set<Player>();
+    public DbSet<Account> Accounts => Set<Account>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -29,5 +30,13 @@ public class AppDbContext : DbContext
         player.Property(p => p.DisplayName).IsRequired().HasMaxLength(64);
         player.Property(p => p.Role).HasConversion<int>();
         player.Property(p => p.ConnectionId).HasMaxLength(128).IsUnicode(false);
+
+        var account = modelBuilder.Entity<Account>();
+        account.HasKey(a => a.Id);
+        account.Property(a => a.Username).IsRequired().HasMaxLength(64);
+        account.Property(a => a.Email).IsRequired().HasMaxLength(256);
+        account.Property(a => a.PasswordHash).IsRequired().HasMaxLength(512);
+        account.HasIndex(a => a.Username).IsUnique();
+        account.HasIndex(a => a.Email).IsUnique();
     }
 }

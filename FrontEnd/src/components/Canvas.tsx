@@ -341,7 +341,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
 
     // Register a best-effort GoToFinal handler that uploads the current stage PNG
     useEffect(() => {
-      const handler = async (..._args: any[]) => {
+      const handler = async (..._args: unknown[]) => {
         try {
           const stage = stageRef.current;
           if (!stage) return;
@@ -364,7 +364,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
       // register raw handler (idempotent, lobbyHub avoids duplicate registration)
       lobbyHub.registerRawHandler('GoToFinal', handler);
       // no explicit cleanup: registerRawHandler persists handlers; no-op on unmount-safe usage
-    }, []);
+    }, [lobbyId]);
 
     // Bootstrap from server on mount (refresh recovery)
     useEffect(() => {

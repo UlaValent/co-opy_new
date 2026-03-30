@@ -19,10 +19,8 @@ type ComparisonResult = {
   score?: number | null;
   message?: string | null;
   diffImageUrl?: string | null;
-  raw?: any;
+  raw?: unknown;
 };
-
-const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 async function authHeaders(extra?: Record<string, string>) {
   const token = await getValidAccessToken();
@@ -273,8 +271,8 @@ export default function FinalPage() {
 
         const json2 = await resp2.json();
         if (mounted) setComparison(json2);
-      } catch (err: any) {
-        if (mounted) setCompError(err?.message ?? 'Comparison failed');
+      } catch (err: unknown) {
+        if (mounted) setCompError(err instanceof Error ? err.message : 'Comparison failed');
       } finally {
         if (mounted) setCompLoading(false);
       }
@@ -282,7 +280,7 @@ export default function FinalPage() {
 
     runComparison();
     return () => { mounted = false; };
-  }, [imageUrl, imagePathRaw, drawingPathRaw, toAbsoluteUrl]);
+  }, [imageUrl, imagePathRaw, drawingPathRaw, drawingUrl, toAbsoluteUrl]);
 
     useEffect(() => {
     return () => {

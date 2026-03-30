@@ -34,7 +34,7 @@ function ensureRoundEndTimestamp(lobbyId: string): number {
 type Stroke = { id: string; color: string; width: number; tool: string; points: number[] };
 
 // Accept both camelCase and PascalCase from the server
-function buildStrokesFromEvents(events: DrawingEvent[] | any[]): Stroke[] {
+function buildStrokesFromEvents(events: DrawingEvent[] | Array<Record<string, unknown>>): Stroke[] {
   const map = new Map<string, Stroke>();
   const order: string[] = [];
 
@@ -138,7 +138,6 @@ export default function DescriberPage() {
 
   // IMPORTANT: re-add the describer to the lobby after refresh to update connectionId and join the SignalR group
   useEffect(() => {
-    let mounted = true;
     (async () => {
       try {
         await lobbyHub.start();
@@ -147,9 +146,10 @@ export default function DescriberPage() {
           // force ensures we update even if client believes it already joined
           await lobbyHub.addPlayerToLobby(lobbyId, username, iconId, { force: true });
         }
-      } catch { /* ignore */ }
+      } catch {
+        console.debug('[DescriberPage] Rejoin after refresh failed');
+      }
     })();
-    return () => { mounted = false; };
   }, [lobbyId, username, state?.iconId]);
 
   useEffect(() => {
@@ -161,10 +161,20 @@ export default function DescriberPage() {
     };
 
     const init = async () => {
-      try { await lobbyHub.start(); } catch { /* ignore */ }
+      try {
+        await lobbyHub.start();
+      } catch {
+        console.debug('[DescriberPage] Hub start failed during init');
+      }
 
       lobbyHub.onReceiveImageHandler(handleReceiveImage);
-      lobbyHub.onGoToFinalHandler(() => { try { navigate('/final'); } catch { } });
+      lobbyHub.onGoToFinalHandler(() => {
+        try {
+          navigate('/final');
+        } catch {
+          console.debug('[DescriberPage] Navigation to final failed');
+        }
+      });
 
       // live stream handlers
       lobbyHub.onStrokeStartedHandler((strokeId, color, width, tool) => {
@@ -207,7 +217,9 @@ export default function DescriberPage() {
           const events = await lobbyHub.getDrawingEvents(lobbyId);
           const built = buildStrokesFromEvents(events);
           if (mounted) setStrokes(built);
-        } catch { /* ignore */ }
+        } catch {
+          console.debug('[DescriberPage] Failed to bootstrap drawing events');
+        }
 
         try {
           const dto = await api.getLobbyImage(lobbyId);
@@ -215,7 +227,9 @@ export default function DescriberPage() {
             const abs = toAbsoluteUrl(dto.url);
             if (mounted) setImageUrl(abs);
           }
-        } catch { }
+        } catch {
+          console.debug('[DescriberPage] Failed to fetch lobby image');
+        }
       }
     };
 
@@ -291,8 +305,12 @@ export default function DescriberPage() {
       try {
         await lobbyHub.start();
         await lobbyHub.goToFinal(lobbyId);
-      } catch (err) {
-        try { navigate('/final'); } catch { }
+      } catch {
+        try {
+          navigate('/final');
+        } catch {
+          console.debug('[DescriberPage] Fallback navigation to final failed');
+        }
       }
     })();
   }, [secondsLeft, lobbyId, navigate]);
@@ -305,7 +323,11 @@ export default function DescriberPage() {
 
   const handleFinishClick = async () => {
     if (!lobbyId) {
-      try { navigate('/final'); } catch { }
+      try {
+        navigate('/final');
+      } catch {
+        console.debug('[DescriberPage] Navigation to final failed (no lobbyId)');
+      }
       return;
     }
 

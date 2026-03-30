@@ -52,7 +52,7 @@ function Home() {
       setName(session.account.username);
     }
     setSelectedAvatar(0);
-  }, []);
+  }, [setName, setSelectedAvatar]);
 
   const ensureAuthenticated = async (): Promise<boolean> => {
     const session = getAuthSession();

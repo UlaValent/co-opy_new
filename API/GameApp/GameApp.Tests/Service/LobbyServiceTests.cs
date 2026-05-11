@@ -1,15 +1,16 @@
 using GameApp.Application.Controllers;
-using GameApp.Application.LobbySystem;
-using GameApp.Application.Service;
-using GameApp.Application.Data;
-using GameApp.Application.Utils;
+using GameApp.Service.Services;
+using GameApp.Integration.Data;
+using GameApp.Service.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using GameApp.Application.Service.Exceptions;
+using GameApp.Service.Exceptions;
 using Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
-using GameApp.Application.Models;
+using GameApp.Service.Models;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Moq;
+using GameApp.Service.Dtos;
 
 namespace GameApp.Tests.Service;
 
@@ -20,6 +21,8 @@ public class LobbyServiceTests : IDisposable
     private readonly Mock<ILobbyCodeGenerator> _mockCodeGenerator;
     private readonly Mock<ILogger<LobbyService>> _mockLogger;
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
+    private readonly EfLobbyRepository _lobbyRepo;
+    private readonly EfPlayerRepository _playerRepo;
 
     public LobbyServiceTests()
     {
@@ -27,8 +30,9 @@ public class LobbyServiceTests : IDisposable
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
 
-        var factory = new TestDbContextFactory(_dbOptions);
-        _dbFactory = factory;
+        _dbFactory = new TestDbContextFactory(_dbOptions);
+        _lobbyRepo = new EfLobbyRepository(_dbFactory);
+        _playerRepo = new EfPlayerRepository(_dbFactory);
 
         _mockGallery = new Mock<IGalleryService>();
         _mockCodeGenerator = new Mock<ILobbyCodeGenerator>();
@@ -43,7 +47,7 @@ public class LobbyServiceTests : IDisposable
 
     private LobbyService CreateService()
     {
-        return new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        return new LobbyService(_mockGallery.Object, _lobbyRepo, _playerRepo, _mockCodeGenerator.Object, _mockLogger.Object);
     }
 
     [Fact]

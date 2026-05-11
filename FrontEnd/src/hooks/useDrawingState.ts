@@ -73,7 +73,7 @@ export function useDrawingState(
   });
 
   // Track the highest iconId we've seen for each player (to avoid downgrades)
-  const playerIconIdTracker = new Map<string, number>();
+  const playerIconIdTracker = useRef(new Map<string, number>());
 
   // Use ref to track playerMap for event handlers
   const playerMapRef = useRef<Map<string, number>>(playerMap);
@@ -138,7 +138,7 @@ export function useDrawingState(
       if (!mounted) return;
 
       // Only update if this is a valid iconId (> 0) and higher than what we've seen
-      const currentIconId = playerIconIdTracker.get(playerName) || 0;
+      const currentIconId = playerIconIdTracker.current.get(playerName) || 0;
 
       // Skip if iconId is 0 or lower than what we already have
       if (iconId <= 0 || iconId < currentIconId) {
@@ -147,7 +147,7 @@ export function useDrawingState(
       }
 
       // Track the highest iconId we've seen for this player
-      playerIconIdTracker.set(playerName, iconId);
+      playerIconIdTracker.current.set(playerName, iconId);
 
       // Add player to the map
       setPlayerMap(prev => new Map(prev).set(playerName, iconId));
@@ -225,7 +225,7 @@ export function useDrawingState(
               const playersData = await playersResponse.json();
               // playersData should be array of { id, displayName, iconId }
               if (Array.isArray(playersData)) {
-                playersData.forEach((player: any) => {
+                playersData.forEach((player: { displayName?: string; username?: string; name?: string; iconId?: number }) => {
                   const name = player.displayName || player.username || player.name;
                   const icon = player.iconId || 1;
                   if (name) {

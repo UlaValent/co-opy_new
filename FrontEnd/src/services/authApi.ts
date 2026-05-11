@@ -66,37 +66,45 @@ async function getErrorMessage(res: Response): Promise<string> {
 }
 
 export async function register(username: string, email: string, password: string): Promise<AuthCallResult> {
-    const res = await fetch(`${API_URL}/account/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, email, password }),
-    });
+    try {
+        const res = await fetch(`${API_URL}/account/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, email, password }),
+        });
 
-    if (!res.ok) {
-        return { ok: false, message: await getErrorMessage(res) };
+        if (!res.ok) {
+            return { ok: false, message: await getErrorMessage(res) };
+        }
+
+        const payload = (await res.json()) as AuthResponse;
+        const session = toSession(payload);
+        setAuthSession(session);
+        return { ok: true, session };
+    } catch {
+        return { ok: false, message: `Could not reach the authentication server at ${API_URL}.` };
     }
-
-    const payload = (await res.json()) as AuthResponse;
-    const session = toSession(payload);
-    setAuthSession(session);
-    return { ok: true, session };
 }
 
 export async function login(email: string, password: string): Promise<AuthCallResult> {
-    const res = await fetch(`${API_URL}/account/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-    });
+    try {
+        const res = await fetch(`${API_URL}/account/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+        });
 
-    if (!res.ok) {
-        return { ok: false, message: await getErrorMessage(res) };
+        if (!res.ok) {
+            return { ok: false, message: await getErrorMessage(res) };
+        }
+
+        const payload = (await res.json()) as AuthResponse;
+        const session = toSession(payload);
+        setAuthSession(session);
+        return { ok: true, session };
+    } catch {
+        return { ok: false, message: `Could not reach the authentication server at ${API_URL}.` };
     }
-
-    const payload = (await res.json()) as AuthResponse;
-    const session = toSession(payload);
-    setAuthSession(session);
-    return { ok: true, session };
 }
 
 export async function refreshSession(): Promise<AuthSession | null> {

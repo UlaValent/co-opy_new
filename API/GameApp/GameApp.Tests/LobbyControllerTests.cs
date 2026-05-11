@@ -3,7 +3,7 @@ using GameApp.Application.Hubs;
 using GameApp.Service.Models;
 using GameApp.Application.Requests;
 using GameApp.Service.Services;
-using GameApp.Dtos;
+using GameApp.Service.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 

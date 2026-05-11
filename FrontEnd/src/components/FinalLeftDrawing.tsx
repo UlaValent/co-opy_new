@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import lobbyHub from '../services/lobbyHub';
 
-const API_URL = (import.meta.env.VITE_API_URL as string) ?? 'https://localhost:7179';
+const API_URL = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? 'https://localhost:7179';
 
 const STAGE_SIZE = 700;
 const POLL_INTERVAL_MS = 25;
@@ -27,7 +27,8 @@ export default function FinalLeftDrawing() {
     mountedRef.current = true;
 
     // Register hub handler first so any immediate DrawingSaved broadcast is handled before the initial GET.
-    const handler = (relativeUrl: string) => {
+    const handler = (...args: unknown[]) => {
+      const relativeUrl = typeof args[0] === 'string' ? args[0] : '';
       if (!relativeUrl) return;
       const absolute = `${API_URL}${relativeUrl}`;
       lastAnnouncedUrlRef.current = absolute;
@@ -47,12 +48,12 @@ export default function FinalLeftDrawing() {
           return;
         }
 
-        // If initial is null, still start polling — upload/announce may be in-flight.
+        // If initial is null, still start polling ï¿½ upload/announce may be in-flight.
         setImageUrl(initial);
 
         // Poll for a short window so other clients who are racing the upload/announce will converge.
         const start = Date.now();
-        let current = initial;
+        const current = initial;
         while (mountedRef.current && Date.now() - start < POLL_TIMEOUT_MS) {
           // if an announcement arrives during polling, prefer it immediately
           if (lastAnnouncedUrlRef.current) {
@@ -69,7 +70,7 @@ export default function FinalLeftDrawing() {
             return;
           }
 
-          // nothing new yet — wait a bit and retry
+          // nothing new yet ï¿½ wait a bit and retry
           await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
         }
       } catch (err) {
@@ -87,7 +88,7 @@ export default function FinalLeftDrawing() {
   }, []);
 
   if (loading) {
-    return <div className="final-left-square">Loading…</div>;
+    return <div className="final-left-square">Loadingï¿½</div>;
   }
 
   if (!imageUrl) {

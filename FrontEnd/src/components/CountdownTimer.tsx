@@ -43,8 +43,6 @@ export default function CountdownTimer({
         intervalRef.current = null;
       }
     };
-    // minutes intentionally not included - caller should remount component to change start time
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, onFinish]);
 
   useEffect(() => {

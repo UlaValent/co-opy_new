@@ -2,14 +2,13 @@ import ExpandButton from './ExpandButton';
 import { AVATAR_STYLES } from '../constants/avatarConstants';
 
 interface SaveButtonProps {
-  username: string;
   selectedAvatar: number | null;
   onSave: () => void;
   className?: string;
 }
 
-const SaveButton = ({ username, selectedAvatar, onSave, className }: SaveButtonProps) => {
-  const isEnabled = username.trim() && selectedAvatar;
+const SaveButton = ({ selectedAvatar, onSave, className }: SaveButtonProps) => {
+  const isEnabled = typeof selectedAvatar === 'number' && selectedAvatar > 0;
 
   return (
     <div style={{ textAlign: 'center' }}>

@@ -1,0 +1,8 @@
+PythonComparison/venv/
+PythonComparison/received/
+API/GameApp/GameApp.Application/debug/forwarded/
+FrontEnd/.env
+FrontEnd/.env.local
+FrontEnd/.env.development.local
+FrontEnd/.env.test.local
+FrontEnd/.env.production.local

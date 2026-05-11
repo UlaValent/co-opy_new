@@ -35,7 +35,7 @@ class LobbyHubClient {
     private onRolesAssigned?: RolesAssignedHandler;
 
     private joinedLobbies: Set<string> = new Set();
-    private rawHandlers: Map<string, Set<(...args: any[]) => void>> = new Map();
+    private rawHandlers: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
     private onReceiveMessage?: ReceiveMessageHandler;
     private onGoToFinal?: GoToFinalHandler;
@@ -56,13 +56,13 @@ class LobbyHubClient {
         if (!this.connection) {
             this.connection = new signalR.HubConnectionBuilder()
                 .withUrl(`${API_URL}/hubs/lobby`, {
-                    accessTokenFactory: async () => (await getValidAccessToken()) ?? ""
+                    accessTokenFactory: async (): Promise<string> => (await getValidAccessToken()) ?? ""
                 })
                 .withAutomaticReconnect()
                 .build();
 
             // Events
-            this.connection.on("PlayerJoined", (...args: any[]) => {
+            this.connection.on("PlayerJoined", (...args: unknown[]) => {
                 let lobbyId: string = "";
                 let playerName: string = "";
                 let iconId: number = 0;
@@ -231,7 +231,7 @@ class LobbyHubClient {
         }
     }
 
-    async uploadDataUrlToDrawings(dataUrl: string, lobbyId?: string): Promise<any> {
+    async uploadDataUrlToDrawings(dataUrl: string, lobbyId?: string): Promise<unknown> {
         const res = await fetch(dataUrl);
         const blob = await res.blob();
         const fd = new FormData();
@@ -332,8 +332,8 @@ class LobbyHubClient {
     onCanvasClearedHandler(cb: CanvasClearedHandler) { this.onCanvasCleared = cb; }
     onCanvasResetHandler(cb: CanvasResetHandler) { this.onCanvasReset = cb; }
 
-    registerRawHandler(eventName: string, cb: (...args: any[]) => void) {
-        const set = this.rawHandlers.get(eventName) ?? new Set<(...args: any[]) => void>();
+    registerRawHandler(eventName: string, cb: (...args: unknown[]) => void) {
+        const set = this.rawHandlers.get(eventName) ?? new Set<(...args: unknown[]) => void>();
         if (!set.has(cb)) {
             set.add(cb);
             this.rawHandlers.set(eventName, set);

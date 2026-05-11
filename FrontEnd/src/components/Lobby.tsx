@@ -4,14 +4,13 @@ import lobbyHub from "../services/lobbyHub";
 import * as api from "../services/lobbyApi";
 import BackgroundLayers from "../components/BackgroundLayers";
 import { mainActionButtonStyle } from "../styles/buttonStyles";
-const API_URL = (import.meta.env.VITE_API_URL as string) ?? "https://localhost:7179";
 import { useLobbyName } from "../hooks/useLobbyName";
 
 type PlayerItem = { id?: string; displayName: string; iconId?: number };
 
 export default function Lobby() {
     const [lobbyId, setLobbyId] = useState("");
-    const { name, setName, status: nameStatus } = useLobbyName("");
+    const { name } = useLobbyName("");
 
     // Initialize iconId from sessionStorage
     const [iconId, setIconId] = useState(() => {
@@ -21,8 +20,6 @@ export default function Lobby() {
 
     const [status, setStatus] = useState("");
     const [players, setPlayers] = useState<PlayerItem[]>([]);
-    const [imageUrl, setImageUrl] = useState<string | null>(null);
-    const [myRole, setMyRole] = useState<string | null>(null);
 
     // Use a ref to track the latest players state for event handlers
     const playersRef = useRef<PlayerItem[]>([]);
@@ -34,7 +31,6 @@ export default function Lobby() {
 
     const location = useLocation();
     const navigate = useNavigate();
-    const joinedFromStateRef = useRef(false);
     const leavingRef = useRef(false); // guard to prevent flicker while navigating
 
     // Resolve local avatar asset path for a given icon id (stored in src/assets/avatars)
@@ -49,7 +45,7 @@ export default function Lobby() {
     };
 
     const lobbyCode =
-        lobbyId || (location as any)?.state?.lobbyCode || "";
+        lobbyId || (location as { state?: { lobbyCode?: string } })?.state?.lobbyCode || "";
 
     const [copied, setCopied] = useState(false);
 
@@ -84,22 +80,24 @@ export default function Lobby() {
     };
 
     // robust extractor for player objects coming from REST/hub
-    const toPlayerItem = (it: any): PlayerItem => {
+    const toPlayerItem = (it: unknown): PlayerItem => {
         if (!it) return { displayName: "", iconId: 1 };
         if (typeof it === "string") return { displayName: it, iconId: 0 };
+        if (typeof it !== "object") return { displayName: String(it), iconId: 0 };
+        const record = it as Record<string, unknown>;
 
-        const displayName = it.displayName ?? it.DisplayName ?? it.username ?? it.userName ?? it.user ?? "";
-        const id = it.id ?? it.Id ?? undefined;
+        const displayName = String(record.displayName ?? record.DisplayName ?? record.username ?? record.userName ?? record.user ?? "");
+        const id = (record.id ?? record.Id) as string | undefined;
 
         // Don't default to 4 - use the actual iconId or 0 if missing
-        let rawIcon = it.iconId ?? it.IconId ?? 0;
+        const rawIcon = record.iconId ?? record.IconId ?? 0;
         const iconIdVal = rawIcon != null ? Number(rawIcon) : 0;
 
         return { id, displayName, iconId: iconIdVal };
     };
 
     // normalize server/hub payloads (some endpoints return strings array, some objects)
-    const normalizePlayers = (list: any[]): PlayerItem[] =>
+    const normalizePlayers = (list: unknown[]): PlayerItem[] =>
         uniquePlayers((list ?? []).map((it) => toPlayerItem(it)));
 
     // attach hub event handlers once when component mounts
@@ -158,7 +156,7 @@ export default function Lobby() {
             const isDescriber = r.includes("explainer") || r.includes("describer");
             const isDrawer = r.includes("artist") || r.includes("drawer");
 
-            const stateLobbyCode = (location as any)?.state?.lobbyCode;
+            const stateLobbyCode = (location as { state?: { lobbyCode?: string } })?.state?.lobbyCode;
             const code = lobbyId || stateLobbyCode || "";
 
             // Include players data in navigation state
@@ -229,7 +227,7 @@ export default function Lobby() {
     // If we navigated here with a lobby code in location.state, start hub and add player
     // after handlers are attached so PlayersState/PlayerJoined events are received.
     useEffect(() => {
-        const state = (location && (location as any).state) ?? {};
+        const state = (location && (location as { state?: { lobbyCode?: string } }).state) ?? {};
         const codeFromState: string | undefined = state.lobbyCode;
 
         // Get iconId from sessionStorage as the source of truth
@@ -273,7 +271,11 @@ export default function Lobby() {
                 await lobbyHub.addPlayerToLobby(codeFromState, name, iconFromStorage, { force: true });
 
                 // persist for downstream pages
-                try { sessionStorage.setItem("lobbyId", codeFromState); } catch {}
+                try {
+                    sessionStorage.setItem("lobbyId", codeFromState);
+                } catch (err) {
+                    console.debug("Failed to persist lobbyId", err);
+                }
 
                 // explicit refresh to ensure we have authoritative list
                 await refreshPlayersFromServer(codeFromState);
@@ -281,7 +283,7 @@ export default function Lobby() {
                 setStatus("Joined lobby " + codeFromState);
             } catch (err) {
                 console.error("Join from state error", err);
-                setStatus("Join failed: " + ((err as any)?.message ?? String(err)));
+                setStatus("Join failed: " + ((err as Record<string, unknown>)?.message ?? String(err)));
             }
         };
 
@@ -290,42 +292,13 @@ export default function Lobby() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location]);
 
-    const handleGetImage = async () => {
-        if (!lobbyId) { setStatus("No lobby id"); return; }
-        setStatus("Searching for lobby image...");
-        try {
-            const dto = await api.getLobbyImage(lobbyId);
-            if (!dto) { setStatus("No image available"); return; }
-            const absolute = dto.url.startsWith("http") ? dto.url : API_URL + dto.url;
-            setImageUrl(absolute);
-            setStatus("Image found.");
-            console.debug("GET image dto:", dto);
-        } catch (err) {
-            console.error("Get lobby image error", err);
-            setStatus("Failed to find image: " + ((err as any)?.message ?? String(err)));
-        }
-    };
-
     const handleAssignRoles = async () => {
-        const stateLobbyCode = (location as any)?.state?.lobbyCode;
+        const stateLobbyCode = (location as { state?: { lobbyCode?: string } })?.state?.lobbyCode;
         const code = lobbyId || stateLobbyCode || "";
         if (!code) { setStatus("No lobby id"); return; }
 
         try {
             setStatus("Starting...");
-
-            // Log current player list
-            console.log("=== PLAYER LIST ON START ===");
-            console.log("Players array:", players);
-            console.log("Player count:", players.length);
-            players.forEach((p, index) => {
-                console.log(`Player ${index + 1}:`, {
-                    displayName: p.displayName,
-                    iconId: p.iconId,
-                    id: p.id
-                });
-            });
-            console.log("============================");
 
             await lobbyHub.start();
 
@@ -346,14 +319,18 @@ export default function Lobby() {
                 return;
             }
 
-            try { sessionStorage.setItem("lobbyId", code); } catch {}
+            try {
+                sessionStorage.setItem("lobbyId", code);
+            } catch (err) {
+                console.debug("Failed to persist lobbyId", err);
+            }
 
             const ok = await lobbyHub.assignRoles(code);
             setStatus(ok ? "Assigned roles" : "Assigning roles failed");
             console.debug("AssignRoles result:", ok);
         } catch (err) {
             console.error("Assign roles error", err);
-            setStatus("Assign roles failed: " + ((err as any)?.message ?? String(err)));
+            setStatus("Assign roles failed: " + ((err as Record<string, unknown>)?.message ?? String(err)));
         }
     };
 
@@ -398,18 +375,6 @@ export default function Lobby() {
         textOverflow: "ellipsis",
         pointerEvents: "none",
     };
-
-    const lobbyCodeStyle: React.CSSProperties = {
-        cursor: "pointer",
-        textAlign: "center",
-        marginTop: 16,
-        color: "#6b0000",
-        fontFamily: "'Jersey 25', sans-serif",
-        userSelect: "none",
-        position: "relative",   // ⬅️ important
-    };
-
-
 
     const startButtonWrap: React.CSSProperties = { display: "flex", justifyContent: "center", marginTop: 40 };
 
@@ -465,6 +430,11 @@ export default function Lobby() {
             </span>
                         )}
                     </div>
+                    {status && (
+                        <div style={{ marginTop: 10, fontSize: 16, color: "#333" }}>
+                            {status}
+                        </div>
+                    )}
                 </div>
 
 

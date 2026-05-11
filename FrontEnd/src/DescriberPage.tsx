@@ -12,7 +12,7 @@ import './styles/DrawingPage.css';
 import {useLobbyName} from "./hooks/useLobbyName";
 import { Stage, Layer, Line, Rect } from 'react-konva';
 
-const API_URL = (import.meta.env.VITE_API_URL as string) ?? 'https://localhost:7179';
+const API_URL = (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ?? 'https://localhost:7179';
 const FRAME_SIZE = 700;
 const ROUND_SECONDS = 300; // 5 minutes
 
@@ -34,12 +34,14 @@ function ensureRoundEndTimestamp(lobbyId: string): number {
 type Stroke = { id: string; color: string; width: number; tool: string; points: number[] };
 
 // Accept both camelCase and PascalCase from the server
-function buildStrokesFromEvents(events: DrawingEvent[] | Array<Record<string, unknown>>): Stroke[] {
+function buildStrokesFromEvents(events: Array<DrawingEvent | Record<string, unknown>>): Stroke[] {
   const map = new Map<string, Stroke>();
   const order: string[] = [];
 
   for (const e of events ?? []) {
-    const type = e.type ?? e.Type;
+    const event = e as Record<string, unknown>;
+    const type = String(event.type ?? event.Type ?? '');
+
     switch (type) {
       case 'CanvasCleared': {
         map.clear();
@@ -47,41 +49,45 @@ function buildStrokesFromEvents(events: DrawingEvent[] | Array<Record<string, un
         break;
       }
       case 'StrokeStarted': {
-        const strokeId = e.strokeId ?? e.StrokeId;
-        const color = e.color ?? e.Color;
-        const width = e.width ?? e.Width;
-        const tool = e.tool ?? e.Tool;
-        const s: Stroke = { id: strokeId, color, width, tool, points: [] };
-        map.set(strokeId, s);
+        const strokeId = String(event.strokeId ?? event.StrokeId ?? '');
+        const color = String(event.color ?? event.Color ?? '#000000');
+        const width = Number(event.width ?? event.Width ?? 1);
+        const tool = String(event.tool ?? event.Tool ?? 'brush');
+        const stroke: Stroke = { id: strokeId, color, width, tool, points: [] };
+        map.set(strokeId, stroke);
         order.push(strokeId);
         break;
       }
       case 'StrokePoints': {
-        const strokeId = e.strokeId ?? e.StrokeId;
-        const s = map.get(strokeId);
-        if (!s) break;
-        const pts = (e.points ?? e.Points) as Array<{ x?: number; y?: number; X?: number; Y?: number }>;
-        const flat = pts.flatMap(p => {
-          const x = (p.x ?? p.X) as number;
-          const y = (p.y ?? p.Y) as number;
+        const strokeId = String(event.strokeId ?? event.StrokeId ?? '');
+        const stroke = map.get(strokeId);
+        if (!stroke) break;
+
+        const points = (event.points ?? event.Points ?? []) as Array<{ x?: number; y?: number; X?: number; Y?: number }>;
+        const flat = points.flatMap((point) => {
+          const x = (point.x ?? point.X) as number;
+          const y = (point.y ?? point.Y) as number;
           return [x, y];
         });
-        if (s.points.length === 0 && flat.length >= 2) {
-          const [sx, sy] = flat;
-          s.points.push(sx, sy, sx, sy);
+
+        if (stroke.points.length === 0 && flat.length >= 2) {
+          const [startX, startY] = flat;
+          stroke.points.push(startX, startY, startX, startY);
         }
-        s.points.push(...flat);
+
+        stroke.points.push(...flat);
         break;
       }
       case 'StrokeEnded': {
-        const strokeId = e.strokeId ?? e.StrokeId;
-        const s = map.get(strokeId);
-        if (!s) break;
-        const pts = s.points;
+        const strokeId = String(event.strokeId ?? event.StrokeId ?? '');
+        const stroke = map.get(strokeId);
+        if (!stroke) break;
+
+        const pts = stroke.points;
         if (pts.length >= 2) {
           const endX = pts[pts.length - 2];
           const endY = pts[pts.length - 1];
-          s.points.push(endX, endY);
+          stroke.points.push(endX, endY);
         }
         break;
       }
@@ -90,7 +96,7 @@ function buildStrokesFromEvents(events: DrawingEvent[] | Array<Record<string, un
     }
   }
 
-  return order.map(id => map.get(id)!).filter(Boolean);
+  return order.map((id) => map.get(id)!).filter(Boolean);
 }
 
 export default function DescriberPage() {
@@ -146,8 +152,8 @@ export default function DescriberPage() {
           // force ensures we update even if client believes it already joined
           await lobbyHub.addPlayerToLobby(lobbyId, username, iconId, { force: true });
         }
-      } catch {
-        console.debug('[DescriberPage] Rejoin after refresh failed');
+      } catch (err) {
+        console.debug('[DescriberPage] Rejoin after refresh failed', err);
       }
     })();
   }, [lobbyId, username, state?.iconId]);
@@ -163,16 +169,16 @@ export default function DescriberPage() {
     const init = async () => {
       try {
         await lobbyHub.start();
-      } catch {
-        console.debug('[DescriberPage] Hub start failed during init');
+      } catch (err) {
+        console.debug('[DescriberPage] Hub start failed during init', err);
       }
 
       lobbyHub.onReceiveImageHandler(handleReceiveImage);
       lobbyHub.onGoToFinalHandler(() => {
         try {
           navigate('/final');
-        } catch {
-          console.debug('[DescriberPage] Navigation to final failed');
+        } catch (err) {
+          console.debug('[DescriberPage] Navigation to final failed', err);
         }
       });
 
@@ -217,8 +223,8 @@ export default function DescriberPage() {
           const events = await lobbyHub.getDrawingEvents(lobbyId);
           const built = buildStrokesFromEvents(events);
           if (mounted) setStrokes(built);
-        } catch {
-          console.debug('[DescriberPage] Failed to bootstrap drawing events');
+        } catch (err) {
+          console.debug('[DescriberPage] Failed to bootstrap drawing events', err);
         }
 
         try {
@@ -227,8 +233,8 @@ export default function DescriberPage() {
             const abs = toAbsoluteUrl(dto.url);
             if (mounted) setImageUrl(abs);
           }
-        } catch {
-          console.debug('[DescriberPage] Failed to fetch lobby image');
+        } catch (err) {
+          console.debug('[DescriberPage] Failed to fetch lobby image', err);
         }
       }
     };
@@ -298,7 +304,7 @@ export default function DescriberPage() {
     if (secondsLeft !== 0 || finishTriggeredRef.current) return;
     finishTriggeredRef.current = true;
     if (!lobbyId) {
-      try { navigate('/final'); } catch { }
+      try { navigate('/final'); } catch (err) { console.debug('[DescriberPage] Immediate navigation to final failed', err); }
       return;
     }
     (async () => {

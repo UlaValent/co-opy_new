@@ -44,7 +44,7 @@ function JoinRoomModal({ onClose, selectedAvatar }: Props) {
             onClose?.();
         } catch (err) {
             console.error("Join lobby error", err);
-            setStatus("Join failed: " + ((err as any)?.message ?? String(err)));
+            setStatus("Join failed: " + ((err as Record<string, unknown>)?.message ?? String(err)));
         }
     };
 

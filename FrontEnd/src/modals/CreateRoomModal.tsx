@@ -44,7 +44,7 @@ function CreateRoomModal({ onClose = () => {}, selectedAvatar }: Props) {
             onClose();
         } catch (err) {
             console.error("Create lobby error", err);
-            setStatus("Create failed: " + ((err as any)?.message ?? String(err)));
+            setStatus("Create failed: " + ((err as Record<string, unknown>)?.message ?? String(err)));
         }
     };
 

@@ -18,7 +18,7 @@ export interface CanvasRef {
 }
 
 // Rebuild Konva layer from server events
-function replayEventsIntoLayer(events: DrawingEvent[] | any[], layer: Konva.Layer) {
+function replayEventsIntoLayer(events: Array<DrawingEvent | Record<string, unknown>>, layer: Konva.Layer) {
   layer.destroyChildren();
   const bgRect = new Konva.Rect({ x: 0, y: 0, width: 700, height: 700, fill: '#FFFFFF' });
   layer.add(bgRect);
@@ -26,7 +26,8 @@ function replayEventsIntoLayer(events: DrawingEvent[] | any[], layer: Konva.Laye
   const strokeMap = new Map<string, Konva.Line>();
 
   for (const e of events ?? []) {
-    const type = e.type ?? e.Type;
+    const event = e as Record<string, unknown>;
+    const type = String(event.type ?? event.Type ?? '');
     switch (type) {
       case 'CanvasCleared': {
         layer.destroyChildren();
@@ -35,10 +36,10 @@ function replayEventsIntoLayer(events: DrawingEvent[] | any[], layer: Konva.Laye
         break;
       }
       case 'StrokeStarted': {
-        const strokeId = e.strokeId ?? e.StrokeId;
-        const color = e.color ?? e.Color;
-        const width = e.width ?? e.Width;
-        const tool = e.tool ?? e.Tool;
+        const strokeId = String(event.strokeId ?? event.StrokeId ?? '');
+        const color = String(event.color ?? event.Color ?? '#000000');
+        const width = Number(event.width ?? event.Width ?? 1);
+        const tool = String(event.tool ?? event.Tool ?? 'brush');
         const line = new Konva.Line({
           points: [],
           stroke: tool === 'eraser' ? '#FFFFFF' : color,
@@ -53,10 +54,10 @@ function replayEventsIntoLayer(events: DrawingEvent[] | any[], layer: Konva.Laye
         break;
       }
       case 'StrokePoints': {
-        const strokeId = e.strokeId ?? e.StrokeId;
+        const strokeId = String(event.strokeId ?? event.StrokeId ?? '');
         const line = strokeMap.get(strokeId);
         if (!line) break;
-        const pts = (e.points ?? e.Points) as Array<{ x?: number; y?: number; X?: number; Y?: number }>;
+        const pts = (event.points ?? event.Points ?? []) as Array<{ x?: number; y?: number; X?: number; Y?: number }>;
         const flat = pts.flatMap(p => [ (p.x ?? p.X) as number, (p.y ?? p.Y) as number ]);
         const existing = line.points();
         if (existing.length === 0 && flat.length >= 2) {
@@ -68,7 +69,7 @@ function replayEventsIntoLayer(events: DrawingEvent[] | any[], layer: Konva.Laye
         break;
       }
       case 'StrokeEnded': {
-        const strokeId = e.strokeId ?? e.StrokeId;
+        const strokeId = String(event.strokeId ?? event.StrokeId ?? '');
         const line = strokeMap.get(strokeId);
         if (!line) break;
         const pts = line.points();
@@ -341,7 +342,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
 
     // Register a best-effort GoToFinal handler that uploads the current stage PNG
     useEffect(() => {
-      const handler = async (..._args: unknown[]) => {
+      const handler = async () => {
         try {
           const stage = stageRef.current;
           if (!stage) return;
@@ -357,7 +358,8 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
             console.error('[Canvas] upload error details:', uploadErr);
           }
         } catch (err) {
-          console.warn('[Canvas] auto-upload error', err);
+          // ignore upload errors - best effort
+          console.debug('[Canvas] GoToFinal upload error', err);
         }
       };
 
@@ -377,7 +379,10 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
             const layer = layerRef.current;
             if (mounted && layer) replayEventsIntoLayer(events, layer);
           }
-        } catch {}
+        } catch (err) {
+          // ignore bootstrap errors
+          console.debug('[Canvas] Bootstrap error', err);
+        }
       })();
 
       lobbyHub.onCanvasResetHandler((events) => {

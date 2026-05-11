@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import ExpandButton from '../components/ExpandButton';
 import AvatarCarouselItem from '../components/AvatarCarouselItem';
 import NavigationArrow from '../components/NavigationArrow';
@@ -17,6 +16,8 @@ type Props = {
 
 function ChooseAvatarModal({ selectedAvatar, setSelectedAvatar, onClose, onSave }: Props) {
     const { name: username, setName: setUsername } = useLobbyName('');
+    const storedAvatarId = Number(sessionStorage.getItem('avatarId') ?? 0);
+    const effectiveAvatarId = selectedAvatar || (Number.isNaN(storedAvatarId) ? 0 : storedAvatarId) || 1;
 
     const {
         getVisibleAvatars,
@@ -27,11 +28,11 @@ function ChooseAvatarModal({ selectedAvatar, setSelectedAvatar, onClose, onSave 
     } = useAvatarCarousel(setSelectedAvatar as (id:number) => void, selectedAvatar); // pass current selection here
 
     const handleSave = () => {
-        if (username.trim() && selectedAvatar) {
-            sessionStorage.setItem('avatarId', selectedAvatar.toString());
+        if (effectiveAvatarId) {
+            sessionStorage.setItem('avatarId', effectiveAvatarId.toString());
 
-            if (onSave) {
-                onSave(username.trim(), selectedAvatar);
+            if (username.trim() && onSave) {
+                onSave(username.trim(), effectiveAvatarId);
             }
         }
         if (onClose) onClose();
@@ -126,8 +127,7 @@ function ChooseAvatarModal({ selectedAvatar, setSelectedAvatar, onClose, onSave 
             
             <div style={{ marginTop: '45px' }}>
                 <SaveButton 
-                    username={username} 
-                    selectedAvatar={selectedAvatar} 
+                    selectedAvatar={effectiveAvatarId} 
                     onSave={handleSave}
                     className="save-button"
                 />

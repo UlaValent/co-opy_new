@@ -52,9 +52,6 @@ export default function FinalPage() {
   const [drawingPathRaw, setDrawingPathRaw] = useState<string | null>(null);
   const [drawingUrl, setDrawingUrl] = useState<string | null>(null);
 
-  // live preview state
-  const [strokes, setStrokes] = useState<Array<{ id: string; color: string; width: number; tool: string; points: number[] }>>([]);
-
   const toAbsoluteUrl = useCallback((url: string) => {
     if (!url) return null;
     if (/^https?:\/\//i.test(url)) return url;
@@ -76,16 +73,13 @@ export default function FinalPage() {
     const init = async () => {
       try { await lobbyHub.start(); } catch { /* ignore */ }
       lobbyHub.onReceiveImageHandler(handleReceiveImage);
-      lobbyHub.onGoToFinalHandler(() => { try { navigate('/final'); } catch { } });
+      lobbyHub.onGoToFinalHandler(() => { try { navigate('/final'); } catch (e) { console.debug('Navigation failed', e); } });
 
-      lobbyHub.onStrokeStartedHandler((strokeId, color, width, tool) => {
-        setStrokes(prev => prev.concat({ id: strokeId, color, width, tool, points: [] }));
-      });
-      lobbyHub.onStrokePointsHandler((strokeId, pts) => {
-        setStrokes(prev => prev.map(s => s.id === strokeId ? { ...s, points: s.points.concat(pts.flatMap(p => [p.x, p.y])) } : s));
-      });
-      lobbyHub.onStrokeEndedHandler((_strokeId) => { });
-      lobbyHub.onCanvasClearedHandler(() => { setStrokes([]); });
+      // Note: stroke events are not currently used in the final display
+      lobbyHub.onStrokeStartedHandler(() => { /* preview not used */ });
+      lobbyHub.onStrokePointsHandler(() => { /* preview not used */ });
+      lobbyHub.onStrokeEndedHandler(() => { /* preview not used */ });
+      lobbyHub.onCanvasClearedHandler(() => { /* not used */ });
 
       if (lobbyId) {
         try {
@@ -98,7 +92,9 @@ export default function FinalPage() {
               setImageUrl(abs);
             }
           }
-        } catch { }
+        } catch (err) {
+          console.debug('[FinalPage] Failed to fetch lobby image', err);
+        }
       }
     };
 
@@ -123,6 +119,7 @@ export default function FinalPage() {
   };
 
   // helper: get canvas blob from left-square (Konva renders canvas inside .left-square)
+  // Note: This is defined but not currently used - reserved for future enhancement
   const getLeftCanvasBlob = async (): Promise<Blob | null> => {
     try {
       const canvas = document.querySelector('.left-square canvas') as HTMLCanvasElement | null;
@@ -144,6 +141,8 @@ export default function FinalPage() {
   };
 
   // upload a blob to POST /api/drawings; returns server-relative url (raw) or null
+  // Note: This is defined but not currently used - reserved for future enhancement
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const uploadDrawingBlob = async (blob: Blob): Promise<string | null> => {
     try {
       const form = new FormData();

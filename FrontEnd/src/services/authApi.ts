@@ -184,27 +184,6 @@ export async function logout(): Promise<void> {
     clearAuthSession();
 }
 
-export async function logoutAllSessions(): Promise<{ ok: boolean; message?: string }> {
-    const token = await getValidAccessToken();
-    if (!token) {
-        clearAuthSession();
-        return { ok: true };
-    }
-
-    const res = await fetch(`${API_URL}/account/logout-all`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-    });
-
-    clearAuthSession();
-
-    if (!res.ok) {
-        return { ok: false, message: await getErrorMessage(res) };
-    }
-
-    return { ok: true };
-}
-
 export function hasSession(): boolean {
     return getAuthSession() !== null;
 }

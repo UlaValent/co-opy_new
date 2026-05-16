@@ -96,21 +96,6 @@ public sealed class AccountController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("logout-all")]
-    [Authorize]
-    public IActionResult LogoutAllSessions()
-    {
-        var account = GetAuthenticatedAccount();
-        if (account is null)
-            return Unauthorized();
-
-        account.TokenVersion += 1;
-        _accounts.Update(account);
-        _accounts.RevokeAllRefreshSessions(account.Id, DateTime.UtcNow, "logout_all_sessions");
-
-        return NoContent();
-    }
-
     [HttpGet("me")]
     [Authorize]
     public ActionResult<AccountResponse> Me()

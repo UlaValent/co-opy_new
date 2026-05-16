@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { deleteAccount, login, logout, logoutAllSessions, register } from "./services/authApi";
+import { deleteAccount, login, logout, register } from "./services/authApi";
 import { getAuthSession } from "./services/authSession";
 import type { CSSProperties } from "react";
 
@@ -113,14 +113,6 @@ export default function AuthPage() {
         setStatus("Signed out.");
     };
 
-    const handleLogoutAll = async () => {
-        setPending(true);
-        setStatus("Ending all sessions...");
-        const result = await logoutAllSessions();
-        setPending(false);
-        setStatus(result.ok ? "All sessions ended." : (result.message ?? "Could not end all sessions."));
-    };
-
     const handleDelete = async () => {
         const confirmed = window.confirm("Delete your account permanently?");
         if (!confirmed) return;
@@ -166,8 +158,7 @@ export default function AuthPage() {
                         </div>
                         <div style={{ display: "grid", gap: "10px" }}>
                             <button style={authActionButtonStyle} disabled={pending} onClick={() => navigate(targetRoute, { replace: true })}>Continue</button>
-                            <button style={authActionButtonStyle} disabled={pending} onClick={handleLogout}>Logout Current Session</button>
-                            <button style={authActionButtonStyle} disabled={pending} onClick={handleLogoutAll}>Logout All Sessions</button>
+                            <button style={authActionButtonStyle} disabled={pending} onClick={handleLogout}>Logout</button>
                             <button style={dangerButtonStyle} disabled={pending} onClick={handleDelete}>Delete Account</button>
                         </div>
                     </>

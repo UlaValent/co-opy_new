@@ -49,10 +49,11 @@ public class LobbyService : ILobbyService
             foreach (var p in persistedPlayers)
             {
                 // ensure ConnectionId is null (it will be set on join) but other properties are kept
-                if (!_lobbies.TryGetValue(lobbyId, out var _))
-                {
-                    // will add lobby below
-                }
+            }
+
+            if (!_lobbies.TryGetValue(lobbyId, out var _))
+            {
+                // will add lobby below
             }
 
             _lobbies.TryAdd(lobbyId, loaded);
@@ -114,10 +115,11 @@ public class LobbyService : ILobbyService
         if (existingInMemory is null)
         {
             // If adding a new player would exceed maximum allowed players, throw
-            if (lobby.Players.Count >= 2)
+            var maxPlayers = lobby.Mode?.MaxPlayers ?? 2;
+            if (lobby.Players.Count >= maxPlayers)
             {
-                _logger.LogWarning("Cannot add player {Player} to lobby {LobbyId}: lobby full (max 2).", player.DisplayName, lobbyId);
-                throw new LobbyFullException(lobbyId, 2);
+                _logger.LogWarning("Cannot add player {Player} to lobby {LobbyId}: lobby full (max {Max}).", player.DisplayName, lobbyId, maxPlayers);
+                throw new LobbyFullException(lobbyId, maxPlayers);
             }
 
             player.LobbyId = lobby.Id;
@@ -163,15 +165,27 @@ public class LobbyService : ILobbyService
     public Lobby CreateLobby()
     {
         var code = _codeGenerator.Generate();
-        var lobby = CreateLobbyInternal(code);
+        var lobby = CreateLobbyInternal(code, new GameMode());
         _logger.LogInformation("Created lobby {LobbyCode}", lobby.LobbyCode);
         return lobby;
     }
 
-    private Lobby CreateLobbyInternal(string lobbyCode)
+    public Lobby CreateLobby(GameMode mode)
+    {
+        var code = _codeGenerator.Generate();
+        var lobby = CreateLobbyInternal(code, mode ?? new GameMode());
+
+        _logger.LogInformation("Created lobby {LobbyCode} with mode {Mode}", lobby.LobbyCode, lobby.Mode.Preset);
+        return lobby;
+    }
+
+    private Lobby CreateLobbyInternal(string lobbyCode, GameMode? mode = null)
     {
         // Atomically add to in-memory store, then persist only if we were the thread that added it
-        var lobby = new Lobby(lobbyCode);
+        var lobby = new Lobby(lobbyCode)
+        {
+            Mode = mode ?? new GameMode()
+        };
         if (_lobbies.TryAdd(lobbyCode, lobby))
         {
             _lobbyRepo.Add(lobby);

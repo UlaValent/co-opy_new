@@ -6,6 +6,7 @@ export interface JoinRequest {
     LobbyId: string;
     Username: string;
     IconId: number;
+    GameMode?: string;
 }
 
 export interface JoinCreateResponse {

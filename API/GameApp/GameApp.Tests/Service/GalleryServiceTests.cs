@@ -1,8 +1,11 @@
 using System.Text;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using GameApp.Application.Service;
+using Microsoft.Extensions.Options;
+using Moq;
+using GameApp.Integration.Gallery;
+using GameApp.Service.Options;
+using GameApp.Service.Services;
 
 namespace GameApp.Tests.Service;
 
@@ -16,10 +19,9 @@ public class GalleryServiceTests : IDisposable
         _tempRoot = Path.Combine(Path.GetTempPath(), "gallery_test_" + Guid.NewGuid());
         Directory.CreateDirectory(_tempRoot);
 
-        var envMock = new Mock<IWebHostEnvironment>();
-        envMock.Setup(e => e.WebRootPath).Returns(_tempRoot);
-
-        _service = new GalleryService(envMock.Object, NullLogger<GalleryService>.Instance);
+        var options = Options.Create(new GalleryOptions { ImagesRoot = _tempRoot });
+        var repository = new FileSystemGalleryRepository(options, NullLogger<FileSystemGalleryRepository>.Instance);
+        _service = new GalleryService(repository, NullLogger<GalleryService>.Instance);
     }
 
     public void Dispose()
@@ -31,7 +33,7 @@ public class GalleryServiceTests : IDisposable
 
     private string CreateImage(string name, int size = 10)
     {
-        var path = Path.Combine(_tempRoot, "images", name);
+        var path = Path.Combine(_tempRoot, name);
         File.WriteAllBytes(path, Encoding.UTF8.GetBytes(new string('x', size)));
         return path;
     }
@@ -101,7 +103,7 @@ public class GalleryServiceTests : IDisposable
         var file = CreateMockFormFile("test.jpg", data);
 
         // Act
-        var result = await _service.SaveImageAsync(file);
+        var result = await _service.SaveImageAsync(file.OpenReadStream(), file.FileName, file.Length);
 
         // Assert
         Assert.NotNull(result);
@@ -117,7 +119,7 @@ public class GalleryServiceTests : IDisposable
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _service.SaveImageAsync(file));
+            _service.SaveImageAsync(file.OpenReadStream(), file.FileName, file.Length));
     }
 
     [Fact]
@@ -147,14 +149,14 @@ public class GalleryServiceTests : IDisposable
     [Fact]
     public async Task SaveImageAsync_Throws_On_Null_File()
     {
-        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveImageAsync(null!));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveImageAsync(null!, "null.jpg", 1));
     }
 
     [Fact]
     public async Task SaveImageAsync_Throws_On_Empty_File()
     {
         var emptyFile = CreateMockFormFile("empty.jpg", Array.Empty<byte>());
-        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveImageAsync(emptyFile));
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveImageAsync(emptyFile.OpenReadStream(), emptyFile.FileName, emptyFile.Length));
     }
 
 }

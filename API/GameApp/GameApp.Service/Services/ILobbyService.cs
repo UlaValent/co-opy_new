@@ -11,6 +11,7 @@ public interface ILobbyService
 
     void AddPlayer(Player player, string lobbyId);
     Lobby CreateLobby();
+    Lobby CreateLobby(GameMode mode);
     void JoinLobby(string lobbyId);
 
     void AddOrUpdatePlayerConnection(string lobbyId, string displayName, int iconId, string connectionId);

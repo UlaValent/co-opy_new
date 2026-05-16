@@ -92,6 +92,66 @@ public class LobbyServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public void CreateLobby_WithMultiplayerMode_PersistsMode_AndCapsPlayersAtFour()
+    {
+        // Arrange
+        _mockCodeGenerator.Setup(x => x.Generate()).Returns("MULTI01");
+        var service = CreateService();
+
+        // Act
+        var lobby = service.CreateLobby(GameMode.FromPreset(GameModePreset.Multiplayer));
+
+        service.AddPlayer(new Player("Player1", 1) { ConnectionId = "conn1" }, lobby.LobbyCode);
+        service.AddPlayer(new Player("Player2", 2) { ConnectionId = "conn2" }, lobby.LobbyCode);
+        service.AddPlayer(new Player("Player3", 3) { ConnectionId = "conn3" }, lobby.LobbyCode);
+        service.AddPlayer(new Player("Player4", 4) { ConnectionId = "conn4" }, lobby.LobbyCode);
+
+        var exception = Assert.Throws<LobbyFullException>(() =>
+            service.AddPlayer(new Player("Player5", 5) { ConnectionId = "conn5" }, lobby.LobbyCode));
+
+        // Assert
+        Assert.Equal(lobby.LobbyCode, exception.LobbyId);
+        Assert.Equal(4, exception.MaxPlayers);
+        Assert.Equal(GameModePreset.Multiplayer, lobby.Mode.Preset);
+        Assert.Equal(4, lobby.Mode.MaxPlayers);
+
+        using var db = new AppDbContext(_dbOptions);
+        var dbLobby = db.Lobbies.Include(l => l.Players).First(l => l.LobbyCode == lobby.LobbyCode);
+
+        Assert.Equal(GameModePreset.Multiplayer, dbLobby.Mode.Preset);
+        Assert.Equal(4, dbLobby.Mode.MaxPlayers);
+        Assert.Equal(4, dbLobby.Players.Count);
+        Assert.DoesNotContain(dbLobby.Players, p => p.DisplayName == "Player5");
+    }
+
+    [Fact]
+    public void CreateLobby_WithShortAndLongModes_PersistsRoundDurations()
+    {
+        // Arrange
+        var service = CreateService();
+        _mockCodeGenerator.SetupSequence(x => x.Generate())
+            .Returns("SHORT01")
+            .Returns("LONG001");
+
+        // Act
+        var shortLobby = service.CreateLobby(GameMode.FromPreset(GameModePreset.Short));
+        var longLobby = service.CreateLobby(GameMode.FromPreset(GameModePreset.Long));
+
+        // Assert
+        Assert.Equal(GameModePreset.Short, shortLobby.Mode.Preset);
+        Assert.Equal(180, shortLobby.Mode.RoundSeconds);
+        Assert.Equal(GameModePreset.Long, longLobby.Mode.Preset);
+        Assert.Equal(480, longLobby.Mode.RoundSeconds);
+
+        using var db = new AppDbContext(_dbOptions);
+        var persistedShort = db.Lobbies.First(l => l.LobbyCode == shortLobby.LobbyCode);
+        var persistedLong = db.Lobbies.First(l => l.LobbyCode == longLobby.LobbyCode);
+
+        Assert.Equal(180, persistedShort.Mode.RoundSeconds);
+        Assert.Equal(480, persistedLong.Mode.RoundSeconds);
+    }
+
+    [Fact]
     public void AssignRoles_PersistsRolesToDatabase_AndRetrievableByNewInstance()
     {
         // Arrange

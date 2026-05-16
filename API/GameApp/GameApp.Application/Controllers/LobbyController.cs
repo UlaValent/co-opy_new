@@ -77,6 +77,20 @@ namespace GameApp.Application.Controllers
             return Ok(response);
         }
 
+        [HttpGet("{lobbyId}")]
+        public ActionResult<LobbyDetailsResponse> GetLobbyDetails(string lobbyId)
+        {
+            if (!_lobbiesService.LobbyExists(lobbyId))
+                return NotFound("Lobby not found");
+
+            var lobby = _lobbiesService.GetLobby(lobbyId);
+            return Ok(new LobbyDetailsResponse
+            {
+                LobbyCode = lobby.LobbyCode,
+                Mode = lobby.Mode
+            });
+        }
+
         [HttpGet("{lobbyId}/players")]
         public ActionResult<IEnumerable<PlayerResponse>> GetLobbyPlayers(string lobbyId)
         {

@@ -12,21 +12,25 @@ import DrawingControls from './components/DrawingControls';
 import { useDrawingState } from './hooks/useDrawingState';
 import { useLobbyName } from './hooks/useLobbyName';
 import './styles/DrawingPage.css';
+import * as api from './services/lobbyApi';
 import lobbyHub from './services/lobbyHub';
 
-const ROUND_SECONDS = 300; // 5 minutes
 const roundKeyFor = (lobbyId: string) => `roundEnd:${lobbyId || 'global'}`;
+const roundDurationKeyFor = (lobbyId: string) => `roundDuration:${lobbyId || 'global'}`;
 
-function ensureRoundEndTimestamp(lobbyId: string): number {
+function ensureRoundEndTimestamp(lobbyId: string, roundSeconds: number): number {
   const key = roundKeyFor(lobbyId);
+  const durationKey = roundDurationKeyFor(lobbyId);
   const now = Date.now();
   const existing = localStorage.getItem(key);
-  if (existing) {
+  const storedDuration = parseInt(localStorage.getItem(durationKey) ?? '', 10);
+  if (existing && storedDuration === roundSeconds) {
     const ts = parseInt(existing, 10);
     if (!isNaN(ts) && ts > now) return ts;
   }
-  const newTs = now + ROUND_SECONDS * 1000;
+  const newTs = now + roundSeconds * 1000;
   localStorage.setItem(key, newTs.toString());
+  localStorage.setItem(durationKey, roundSeconds.toString());
   return newTs;
 }
 
@@ -46,6 +50,7 @@ const DrawingPage = () => {
 
   const lobbyId = state?.lobbyId || sessionStorage.getItem('lobbyId') || '';
   const { name: username } = useLobbyName('');
+  const [roundSeconds, setRoundSeconds] = useState<number>(300);
 
   // Log the players received from navigation
   useEffect(() => {
@@ -115,6 +120,25 @@ const DrawingPage = () => {
   // Clear can stay as is (Canvas.clear() already calls hub ClearCanvas)
   const handleClear = () => canvasRef.current?.clear();
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!lobbyId) return;
+      try {
+        const details = await api.getLobbyDetails(lobbyId);
+        if (mounted && details?.mode?.roundSeconds) {
+          setRoundSeconds(details.mode.roundSeconds);
+        }
+      } catch {
+        // keep the default if the fetch fails
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [lobbyId]);
+
   const scale = 0.7;
   const scaledStyle: React.CSSProperties = {
     transform: `scale(${scale})`,
@@ -127,19 +151,19 @@ const DrawingPage = () => {
 
   // Shared timer using localStorage round end timestamp
   const [secondsLeft, setSecondsLeft] = useState<number>(() => {
-    const ts = ensureRoundEndTimestamp(lobbyId);
+    const ts = ensureRoundEndTimestamp(lobbyId, roundSeconds);
     return Math.max(0, Math.ceil((ts - Date.now()) / 1000));
   });
 
   useEffect(() => {
     // When lobby changes ensure there's an end timestamp (and update displayed value)
-    const ts = ensureRoundEndTimestamp(lobbyId);
+    const ts = ensureRoundEndTimestamp(lobbyId, roundSeconds);
     setSecondsLeft(Math.max(0, Math.ceil((ts - Date.now()) / 1000)));
 
     const key = roundKeyFor(lobbyId);
     const tick = () => {
       const stored = localStorage.getItem(key);
-      const end = stored ? parseInt(stored, 10) : ensureRoundEndTimestamp(lobbyId);
+      const end = stored ? parseInt(stored, 10) : ensureRoundEndTimestamp(lobbyId, roundSeconds);
       const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       setSecondsLeft(left);
     };
@@ -161,7 +185,7 @@ const DrawingPage = () => {
       window.clearInterval(intervalId);
       window.removeEventListener('storage', onStorage);
     };
-  }, [lobbyId]);
+  }, [lobbyId, roundSeconds]);
 
   const formatTime = (s: number) => {
     const minutes = Math.floor(s / 60).toString().padStart(2, '0');

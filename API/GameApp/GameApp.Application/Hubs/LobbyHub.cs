@@ -69,6 +69,8 @@ namespace GameApp.Application.Hubs
         {
             var result = _lobbyService.AssignRoles(lobbyId);
             if (result is null) return false;
+            var lobby = _lobbyService.GetLobby(lobbyId);
+            var isMultiplayer = lobby.Mode?.Preset == GameModePreset.Multiplayer;
 
             var describerConn = result.DescriberConnectionId;
             var drawerConn = result.DrawerConnectionId;
@@ -77,8 +79,18 @@ namespace GameApp.Application.Hubs
             // Notify individual clients of their roles
             if (!string.IsNullOrEmpty(describerConn))
                 await Clients.Client(describerConn).SendAsync("AssignedRole", result.Describer.Role.ToString());
-            if (!string.IsNullOrEmpty(drawerConn))
+            if (isMultiplayer)
+            {
+                foreach (var artist in result.Artists)
+                {
+                    if (!string.IsNullOrEmpty(artist.ConnectionId))
+                        await Clients.Client(artist.ConnectionId).SendAsync("AssignedRole", artist.Role.ToString());
+                }
+            }
+            else if (!string.IsNullOrEmpty(drawerConn))
+            {
                 await Clients.Client(drawerConn).SendAsync("AssignedRole", result.Drawer.Role.ToString());
+            }
 
             // Send the image only to the describer (if available)
             if (image is not null && !string.IsNullOrEmpty(describerConn))
@@ -87,7 +99,8 @@ namespace GameApp.Application.Hubs
             }
 
             // notify the whole group that roles were assigned
-            await Clients.Group(lobbyId).SendAsync("RolesAssigned", result.Describer.DisplayName, result.Drawer.DisplayName);
+            var artistNames = string.Join(", ", result.Artists.Select(a => a.DisplayName));
+            await Clients.Group(lobbyId).SendAsync("RolesAssigned", result.Describer.DisplayName, artistNames);
 
             return true;
         }
@@ -97,8 +110,17 @@ namespace GameApp.Application.Hubs
         {
             _drawingStore.AppendStrokeStarted(lobbyId, strokeId, color, width, tool);
 
-            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
             var dto = new StrokeStartedDto(lobbyId, strokeId, color, width, tool);
+            var lobby = _lobbyService.GetLobby(lobbyId);
+            var isMultiplayer = lobby.Mode?.Preset == GameModePreset.Multiplayer;
+
+            if (isMultiplayer)
+            {
+                await Clients.GroupExcept(lobbyId, new[] { Context.ConnectionId }).SendAsync("StrokeStarted", strokeId, color, width, tool);
+                return;
+            }
+
+            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
 
             if (target is not null)
                 await _drawingRelay.RelayStrokeStarted(dto, target);
@@ -112,8 +134,17 @@ namespace GameApp.Application.Hubs
 
             _drawingStore.AppendStrokePoints(lobbyId, strokeId, points);
 
-            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
             var dto = new StrokePointsDto(lobbyId, strokeId, points);
+            var lobby = _lobbyService.GetLobby(lobbyId);
+            var isMultiplayer = lobby.Mode?.Preset == GameModePreset.Multiplayer;
+
+            if (isMultiplayer)
+            {
+                await Clients.GroupExcept(lobbyId, new[] { Context.ConnectionId }).SendAsync("StrokePoints", strokeId, points);
+                return;
+            }
+
+            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
 
             if (target is not null)
                 await _drawingRelay.RelayStrokePoints(dto, target);
@@ -125,8 +156,17 @@ namespace GameApp.Application.Hubs
         {
             _drawingStore.AppendStrokeEnded(lobbyId, strokeId);
 
-            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
             var dto = new StrokeEndedDto(lobbyId, strokeId);
+            var lobby = _lobbyService.GetLobby(lobbyId);
+            var isMultiplayer = lobby.Mode?.Preset == GameModePreset.Multiplayer;
+
+            if (isMultiplayer)
+            {
+                await Clients.GroupExcept(lobbyId, new[] { Context.ConnectionId }).SendAsync("StrokeEnded", strokeId);
+                return;
+            }
+
+            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
 
             if (target is not null)
                 await _drawingRelay.RelayStrokeEnded(dto, target);
@@ -138,8 +178,17 @@ namespace GameApp.Application.Hubs
         {
             _drawingStore.AppendCanvasCleared(lobbyId);
 
-            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
             var dto = new CanvasClearedDto(lobbyId);
+            var lobby = _lobbyService.GetLobby(lobbyId);
+            var isMultiplayer = lobby.Mode?.Preset == GameModePreset.Multiplayer;
+
+            if (isMultiplayer)
+            {
+                await Clients.GroupExcept(lobbyId, new[] { Context.ConnectionId }).SendAsync("CanvasCleared");
+                return;
+            }
+
+            var target = GetDescriberConnection(lobbyId, Context.ConnectionId);
 
             if (target is not null)
                 await _drawingRelay.RelayCanvasCleared(dto, target);

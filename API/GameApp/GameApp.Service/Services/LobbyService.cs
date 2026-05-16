@@ -313,25 +313,47 @@ public class LobbyService : ILobbyService
         }
 
         var describer = candidates.GetRandom()!;
-        var drawer = candidates.First(p => !ReferenceEquals(p, describer));
+        var artists = candidates.Where(p => !ReferenceEquals(p, describer)).ToList();
+        if (artists.Count == 0)
+        {
+            _logger.LogWarning("AssignRoles: No artist candidates available in lobby {LobbyId}.", lobbyId);
+            return null;
+        }
+
+        var drawer = artists[0];
 
         describer.Role = PlayerRole.Explainer;
-        drawer.Role = PlayerRole.Artist;
+        foreach (var artist in artists)
+        {
+            artist.Role = PlayerRole.Artist;
+        }
 
         var image = GetOrAssignLobbyImage(lobbyId);
 
-        var dbPlayers = _playerRepo.GetByLobbyIds(lobby.Id, new[] { describer.DisplayName, drawer.DisplayName });
+        var assignedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            describer.DisplayName
+        };
+        foreach (var artist in artists)
+        {
+            assignedNames.Add(artist.DisplayName);
+        }
+
+        var dbPlayers = _playerRepo.GetByLobbyIds(lobby.Id, assignedNames.ToArray());
         foreach (var p in dbPlayers)
         {
             if (p.DisplayName == describer.DisplayName) p.Role = PlayerRole.Explainer;
-            if (p.DisplayName == drawer.DisplayName) p.Role = PlayerRole.Artist;
+            if (assignedNames.Contains(p.DisplayName) && !string.Equals(p.DisplayName, describer.DisplayName, StringComparison.OrdinalIgnoreCase))
+            {
+                p.Role = PlayerRole.Artist;
+            }
             _playerRepo.Update(p);
         }
         if (dbPlayers.Count > 0) _playerRepo.SaveChanges();
 
-        _logger.LogInformation("Roles assigned in lobby {LobbyId}: Describer={Describer}, Drawer={Drawer}, ImageAssigned={HasImage}",
-            lobbyId, describer.DisplayName, drawer.DisplayName, image is not null);
+        _logger.LogInformation("Roles assigned in lobby {LobbyId}: Describer={Describer}, Artists={Artists}, ImageAssigned={HasImage}",
+            lobbyId, describer.DisplayName, string.Join(", ", artists.Select(a => a.DisplayName)), image is not null);
 
-        return new RolesAssignment(describer.ConnectionId, drawer.ConnectionId, describer, drawer, image);
+        return new RolesAssignment(describer.ConnectionId, drawer.ConnectionId, describer, drawer, artists, image);
     }
 }

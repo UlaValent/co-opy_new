@@ -87,6 +87,18 @@ function replayEventsIntoLayer(events: DrawingEvent[] | any[], layer: Konva.Laye
   layer.draw();
 }
 
+function createStrokeLine(color: string, width: number, tool: string) {
+  return new Konva.Line({
+    points: [],
+    stroke: tool === 'eraser' ? '#FFFFFF' : color,
+    strokeWidth: width,
+    tension: 0,
+    lineCap: 'round',
+    lineJoin: 'round',
+    globalCompositeOperation: tool === 'eraser' ? 'destination-out' : 'source-over',
+  });
+}
+
 const Canvas = forwardRef<CanvasRef, CanvasProps>(
   ({ selectedColor, brushSize, selectedTool, onSaveState }, ref) => {
     // Konva stage and layer references
@@ -97,6 +109,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
     const isDrawingRef = useRef(false);
     const currentLineRef = useRef<Konva.Line | null>(null);
     const currentStrokeIdRef = useRef<string | null>(null);
+    const strokeMapRef = useRef<Map<string, Konva.Line>>(new Map());
 
     // History for undo/redo - stores complete canvas state
     const historyRef = useRef<string[]>([]);
@@ -162,6 +175,7 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
       layer.destroyChildren();
       const bgRect = new Konva.Rect({ x: 0, y: 0, width: 700, height: 700, fill: '#FFFFFF' });
       layer.add(bgRect);
+      strokeMapRef.current.clear();
       layer.draw();
       
       // Save this clear state to history
@@ -369,6 +383,53 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
     // Bootstrap from server on mount (refresh recovery)
     useEffect(() => {
       let mounted = true;
+
+      const applyCanvasCleared = () => {
+        const layer = layerRef.current;
+        if (!layer) return;
+        layer.destroyChildren();
+        layer.add(new Konva.Rect({ x: 0, y: 0, width: 700, height: 700, fill: '#FFFFFF' }));
+        strokeMapRef.current.clear();
+        layer.draw();
+      };
+
+      const applyStrokeStarted = (strokeId: string, color: string, width: number, tool: string) => {
+        const layer = layerRef.current;
+        if (!layer || strokeMapRef.current.has(strokeId)) return;
+        const line = createStrokeLine(color, width, tool);
+        strokeMapRef.current.set(strokeId, line);
+        layer.add(line);
+        layer.draw();
+      };
+
+      const applyStrokePoints = (strokeId: string, points: { x: number; y: number }[]) => {
+        const layer = layerRef.current;
+        const line = strokeMapRef.current.get(strokeId);
+        if (!layer || !line || !points.length) return;
+        const flat = points.flatMap(p => [p.x, p.y]);
+        const existing = line.points();
+        if (existing.length === 0 && flat.length >= 2) {
+          const [sx, sy] = flat;
+          line.points([sx, sy, sx, sy, ...flat]);
+        } else {
+          line.points(existing.concat(flat));
+        }
+        layer.draw();
+      };
+
+      const applyStrokeEnded = (strokeId: string) => {
+        const layer = layerRef.current;
+        const line = strokeMapRef.current.get(strokeId);
+        if (!layer || !line) return;
+        const pts = line.points();
+        if (pts.length >= 2) {
+          const endX = pts[pts.length - 2];
+          const endY = pts[pts.length - 1];
+          line.points(pts.concat([endX, endY]));
+        }
+        layer.draw();
+      };
+
       (async () => {
         try {
           await lobbyHub.start();
@@ -385,6 +446,11 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
         if (layer) replayEventsIntoLayer(events, layer);
       });
 
+      lobbyHub.onCanvasClearedHandler(() => applyCanvasCleared());
+      lobbyHub.onStrokeStartedHandler((strokeId, color, width, tool) => applyStrokeStarted(strokeId, color, width, tool));
+      lobbyHub.onStrokePointsHandler((strokeId, points) => applyStrokePoints(strokeId, points));
+      lobbyHub.onStrokeEndedHandler((strokeId) => applyStrokeEnded(strokeId));
+
       return () => { mounted = false; };
     }, [lobbyId]);
 
@@ -394,8 +460,12 @@ const Canvas = forwardRef<CanvasRef, CanvasProps>(
           width={700}
           height={700}
           onMouseDown={handleMouseDown}
-          onMousemove={handleMouseMove}
-          onMouseup={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onTouchStart={handleMouseDown}
+          onTouchMove={handleMouseMove}
+          onTouchEnd={handleMouseUp}
+          style={{ touchAction: 'none' }}
           ref={stageRef}
         >
           <Layer ref={layerRef}>

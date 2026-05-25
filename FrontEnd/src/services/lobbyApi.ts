@@ -6,6 +6,7 @@ export interface JoinRequest {
     LobbyId: string;
     Username: string;
     IconId: number;
+    GameMode?: string;
 }
 
 export interface JoinCreateResponse {
@@ -16,6 +17,17 @@ export interface ImageDto {
     id: string;
     url: string;
     bytes: number;
+}
+
+export interface LobbyModeDto {
+    preset: string;
+    maxPlayers: number;
+    roundSeconds: number;
+}
+
+export interface LobbyDetailsDto {
+    lobbyCode: string;
+    mode: LobbyModeDto;
 }
 
 export async function joinLobby(request: JoinRequest): Promise<{ ok: boolean; lobbyCode?: string; message?: string }> {
@@ -59,6 +71,18 @@ export async function getLobbyImage(lobbyId: string): Promise<ImageDto | null> {
     });
     if (!res.ok) return null;
     return (await res.json()) as ImageDto;
+}
+
+export async function getLobbyDetails(lobbyId: string): Promise<LobbyDetailsDto | null> {
+    const token = await getValidAccessToken();
+    if (!token) return null;
+
+    const res = await fetch(`${API_URL}/lobby/${encodeURIComponent(lobbyId)}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as LobbyDetailsDto;
 }
 
 /**

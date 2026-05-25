@@ -9,6 +9,7 @@ public class Lobby
     public List<Player> Players { get; } = new();
     public string? SelectedImageId { get; set; }
     public string? SelectedImageUrl { get; set; }
+    public GameMode Mode { get; set; } = new GameMode();
 
     public Lobby(string lobbyCode) =>  this.LobbyCode = lobbyCode;
 }

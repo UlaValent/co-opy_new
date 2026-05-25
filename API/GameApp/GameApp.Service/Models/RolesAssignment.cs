@@ -8,5 +8,6 @@ public record RolesAssignment(
     string? DrawerConnectionId,
     Player Describer,
     Player Drawer,
+    IReadOnlyList<Player> Artists,
     ImageDto? Image
 );

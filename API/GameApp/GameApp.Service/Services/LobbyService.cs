@@ -49,10 +49,11 @@ public class LobbyService : ILobbyService
             foreach (var p in persistedPlayers)
             {
                 // ensure ConnectionId is null (it will be set on join) but other properties are kept
-                if (!_lobbies.TryGetValue(lobbyId, out var _))
-                {
-                    // will add lobby below
-                }
+            }
+
+            if (!_lobbies.TryGetValue(lobbyId, out var _))
+            {
+                // will add lobby below
             }
 
             _lobbies.TryAdd(lobbyId, loaded);
@@ -114,10 +115,11 @@ public class LobbyService : ILobbyService
         if (existingInMemory is null)
         {
             // If adding a new player would exceed maximum allowed players, throw
-            if (lobby.Players.Count >= 2)
+            var maxPlayers = lobby.Mode?.MaxPlayers ?? 2;
+            if (lobby.Players.Count >= maxPlayers)
             {
-                _logger.LogWarning("Cannot add player {Player} to lobby {LobbyId}: lobby full (max 2).", player.DisplayName, lobbyId);
-                throw new LobbyFullException(lobbyId, 2);
+                _logger.LogWarning("Cannot add player {Player} to lobby {LobbyId}: lobby full (max {Max}).", player.DisplayName, lobbyId, maxPlayers);
+                throw new LobbyFullException(lobbyId, maxPlayers);
             }
 
             player.LobbyId = lobby.Id;
@@ -163,15 +165,27 @@ public class LobbyService : ILobbyService
     public Lobby CreateLobby()
     {
         var code = _codeGenerator.Generate();
-        var lobby = CreateLobbyInternal(code);
+        var lobby = CreateLobbyInternal(code, new GameMode());
         _logger.LogInformation("Created lobby {LobbyCode}", lobby.LobbyCode);
         return lobby;
     }
 
-    private Lobby CreateLobbyInternal(string lobbyCode)
+    public Lobby CreateLobby(GameMode mode)
+    {
+        var code = _codeGenerator.Generate();
+        var lobby = CreateLobbyInternal(code, mode ?? new GameMode());
+
+        _logger.LogInformation("Created lobby {LobbyCode} with mode {Mode}", lobby.LobbyCode, lobby.Mode.Preset);
+        return lobby;
+    }
+
+    private Lobby CreateLobbyInternal(string lobbyCode, GameMode? mode = null)
     {
         // Atomically add to in-memory store, then persist only if we were the thread that added it
-        var lobby = new Lobby(lobbyCode);
+        var lobby = new Lobby(lobbyCode)
+        {
+            Mode = mode ?? new GameMode()
+        };
         if (_lobbies.TryAdd(lobbyCode, lobby))
         {
             _lobbyRepo.Add(lobby);
@@ -299,25 +313,47 @@ public class LobbyService : ILobbyService
         }
 
         var describer = candidates.GetRandom()!;
-        var drawer = candidates.First(p => !ReferenceEquals(p, describer));
+        var artists = candidates.Where(p => !ReferenceEquals(p, describer)).ToList();
+        if (artists.Count == 0)
+        {
+            _logger.LogWarning("AssignRoles: No artist candidates available in lobby {LobbyId}.", lobbyId);
+            return null;
+        }
+
+        var drawer = artists[0];
 
         describer.Role = PlayerRole.Explainer;
-        drawer.Role = PlayerRole.Artist;
+        foreach (var artist in artists)
+        {
+            artist.Role = PlayerRole.Artist;
+        }
 
         var image = GetOrAssignLobbyImage(lobbyId);
 
-        var dbPlayers = _playerRepo.GetByLobbyIds(lobby.Id, new[] { describer.DisplayName, drawer.DisplayName });
+        var assignedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            describer.DisplayName
+        };
+        foreach (var artist in artists)
+        {
+            assignedNames.Add(artist.DisplayName);
+        }
+
+        var dbPlayers = _playerRepo.GetByLobbyIds(lobby.Id, assignedNames.ToArray());
         foreach (var p in dbPlayers)
         {
             if (p.DisplayName == describer.DisplayName) p.Role = PlayerRole.Explainer;
-            if (p.DisplayName == drawer.DisplayName) p.Role = PlayerRole.Artist;
+            if (assignedNames.Contains(p.DisplayName) && !string.Equals(p.DisplayName, describer.DisplayName, StringComparison.OrdinalIgnoreCase))
+            {
+                p.Role = PlayerRole.Artist;
+            }
             _playerRepo.Update(p);
         }
         if (dbPlayers.Count > 0) _playerRepo.SaveChanges();
 
-        _logger.LogInformation("Roles assigned in lobby {LobbyId}: Describer={Describer}, Drawer={Drawer}, ImageAssigned={HasImage}",
-            lobbyId, describer.DisplayName, drawer.DisplayName, image is not null);
+        _logger.LogInformation("Roles assigned in lobby {LobbyId}: Describer={Describer}, Artists={Artists}, ImageAssigned={HasImage}",
+            lobbyId, describer.DisplayName, string.Join(", ", artists.Select(a => a.DisplayName)), image is not null);
 
-        return new RolesAssignment(describer.ConnectionId, drawer.ConnectionId, describer, drawer, image);
+        return new RolesAssignment(describer.ConnectionId, drawer.ConnectionId, describer, drawer, artists, image);
     }
 }

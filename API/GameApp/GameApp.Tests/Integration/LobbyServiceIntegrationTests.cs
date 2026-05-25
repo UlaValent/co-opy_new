@@ -1,25 +1,25 @@
 ﻿using System;
 using System.Linq;
-using GameApp.Application.Controllers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
-using GameApp.Application.Data;
-using GameApp.Application.LobbySystem;
-using GameApp.Application.Service;
-using GameApp.Application.Service.Exceptions;
-using GameApp.Application.Utils;
+using GameApp.Integration.Data;
+using GameApp.Service.Dtos;
+using GameApp.Service.Exceptions;
+using GameApp.Service.Models;
+using GameApp.Service.Services;
+using GameApp.Service.Utils;
 
 namespace GameApp.Tests.Integration;
 
 public class LobbyServiceIntegrationTests : IDisposable
 {
     private readonly DbContextOptions<AppDbContext> _dbOptions;
-    private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly Mock<IGalleryService> _mockGallery;
     private readonly Mock<ILobbyCodeGenerator> _mockCodeGenerator;
     private readonly Mock<ILogger<LobbyService>> _mockLogger;
+    private readonly IDbContextFactory<AppDbContext> _dbFactory;
 
     public LobbyServiceIntegrationTests()
     {
@@ -45,7 +45,7 @@ public class LobbyServiceIntegrationTests : IDisposable
     {
         _mockCodeGenerator.Setup(x => x.Generate()).Returns(() => Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper());
 
-        var service1 = new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        var service1 = CreateService();
 
         var created = service1.CreateLobby();
         var lobbyCode = created.LobbyCode;
@@ -54,7 +54,7 @@ public class LobbyServiceIntegrationTests : IDisposable
         service1.AddPlayer(player, lobbyCode);
 
         // Simulate a separate instance (for example, another process) using the same database
-        var service2 = new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        var service2 = CreateService();
 
         using var db = new AppDbContext(_dbOptions);
         var dbLobby = db.Lobbies.Include(l => l.Players).FirstOrDefault(l => l.LobbyCode == lobbyCode);
@@ -67,7 +67,7 @@ public class LobbyServiceIntegrationTests : IDisposable
     {
         // Arrange
         _mockCodeGenerator.Setup(x => x.Generate()).Returns("TEST123");
-        var service = new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        var service = CreateService();
         var lobby = service.CreateLobby();
         var lobbyCode = lobby.LobbyCode;
 
@@ -92,6 +92,66 @@ public class LobbyServiceIntegrationTests : IDisposable
     }
 
     [Fact]
+    public void CreateLobby_WithMultiplayerMode_PersistsMode_AndCapsPlayersAtFour()
+    {
+        // Arrange
+        _mockCodeGenerator.Setup(x => x.Generate()).Returns("MULTI01");
+        var service = CreateService();
+
+        // Act
+        var lobby = service.CreateLobby(GameMode.FromPreset(GameModePreset.Multiplayer));
+
+        service.AddPlayer(new Player("Player1", 1) { ConnectionId = "conn1" }, lobby.LobbyCode);
+        service.AddPlayer(new Player("Player2", 2) { ConnectionId = "conn2" }, lobby.LobbyCode);
+        service.AddPlayer(new Player("Player3", 3) { ConnectionId = "conn3" }, lobby.LobbyCode);
+        service.AddPlayer(new Player("Player4", 4) { ConnectionId = "conn4" }, lobby.LobbyCode);
+
+        var exception = Assert.Throws<LobbyFullException>(() =>
+            service.AddPlayer(new Player("Player5", 5) { ConnectionId = "conn5" }, lobby.LobbyCode));
+
+        // Assert
+        Assert.Equal(lobby.LobbyCode, exception.LobbyId);
+        Assert.Equal(4, exception.MaxPlayers);
+        Assert.Equal(GameModePreset.Multiplayer, lobby.Mode.Preset);
+        Assert.Equal(4, lobby.Mode.MaxPlayers);
+
+        using var db = new AppDbContext(_dbOptions);
+        var dbLobby = db.Lobbies.Include(l => l.Players).First(l => l.LobbyCode == lobby.LobbyCode);
+
+        Assert.Equal(GameModePreset.Multiplayer, dbLobby.Mode.Preset);
+        Assert.Equal(4, dbLobby.Mode.MaxPlayers);
+        Assert.Equal(4, dbLobby.Players.Count);
+        Assert.DoesNotContain(dbLobby.Players, p => p.DisplayName == "Player5");
+    }
+
+    [Fact]
+    public void CreateLobby_WithShortAndLongModes_PersistsRoundDurations()
+    {
+        // Arrange
+        var service = CreateService();
+        _mockCodeGenerator.SetupSequence(x => x.Generate())
+            .Returns("SHORT01")
+            .Returns("LONG001");
+
+        // Act
+        var shortLobby = service.CreateLobby(GameMode.FromPreset(GameModePreset.Short));
+        var longLobby = service.CreateLobby(GameMode.FromPreset(GameModePreset.Long));
+
+        // Assert
+        Assert.Equal(GameModePreset.Short, shortLobby.Mode.Preset);
+        Assert.Equal(180, shortLobby.Mode.RoundSeconds);
+        Assert.Equal(GameModePreset.Long, longLobby.Mode.Preset);
+        Assert.Equal(480, longLobby.Mode.RoundSeconds);
+
+        using var db = new AppDbContext(_dbOptions);
+        var persistedShort = db.Lobbies.First(l => l.LobbyCode == shortLobby.LobbyCode);
+        var persistedLong = db.Lobbies.First(l => l.LobbyCode == longLobby.LobbyCode);
+
+        Assert.Equal(180, persistedShort.Mode.RoundSeconds);
+        Assert.Equal(480, persistedLong.Mode.RoundSeconds);
+    }
+
+    [Fact]
     public void AssignRoles_PersistsRolesToDatabase_AndRetrievableByNewInstance()
     {
         // Arrange
@@ -102,7 +162,7 @@ public class LobbyServiceIntegrationTests : IDisposable
         _mockGallery.Setup(x => x.GetImageFilePath("img1"))
             .Returns("/path/to/img1.jpg");
 
-        var service1 = new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        var service1 = CreateService();
         var lobby = service1.CreateLobby();
         var lobbyCode = lobby.LobbyCode;
 
@@ -141,7 +201,7 @@ public class LobbyServiceIntegrationTests : IDisposable
     {
         // Arrange
         _mockCodeGenerator.Setup(x => x.Generate()).Returns("DUP123");
-        var service = new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        var service = CreateService();
         var lobby = service.CreateLobby();
         var lobbyCode = lobby.LobbyCode;
 
@@ -172,6 +232,13 @@ public class LobbyServiceIntegrationTests : IDisposable
         var memoryLobby = service.GetLobby(lobbyCode);
         Assert.Single(memoryLobby.Players);
         Assert.Equal("conn_updated", memoryLobby.Players.First().ConnectionId);
+    }
+
+    private LobbyService CreateService()
+    {
+        var lobbyRepository = new EfLobbyRepository(_dbFactory);
+        var playerRepository = new EfPlayerRepository(_dbFactory);
+        return new LobbyService(_mockGallery.Object, lobbyRepository, playerRepository, _mockCodeGenerator.Object, _mockLogger.Object);
     }
 }
 

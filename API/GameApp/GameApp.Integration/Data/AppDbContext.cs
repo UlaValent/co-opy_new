@@ -21,6 +21,10 @@ public class AppDbContext : DbContext
         lobby.Property(l => l.Phase).HasMaxLength(40);
         lobby.Property(l => l.SelectedImageId).HasMaxLength(256);
         lobby.Property(l => l.SelectedImageUrl).HasMaxLength(512);
+        lobby.Property(l => l.Mode)
+            .HasConversion(new GameModeJsonValueConverter())
+            .HasColumnName("Mode")
+            .HasColumnType("TEXT");
         lobby.HasMany(l => l.Players)
              .WithOne(p => p.Lobby!)
              .HasForeignKey(p => p.LobbyId)

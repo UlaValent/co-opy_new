@@ -302,3 +302,5 @@ Console.WriteLine($"Application starting on environment: {app.Environment.Enviro
 Console.WriteLine($"Allowed origins configured: {string.Join(", ", allowedOrigins)}");
 
 app.Run();
+
+public partial class Program { }

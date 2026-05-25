@@ -14,20 +14,23 @@ import { Stage, Layer, Line, Rect } from 'react-konva';
 
 const API_URL = (import.meta.env.VITE_API_URL as string) ?? 'https://localhost:7179';
 const FRAME_SIZE = 700;
-const ROUND_SECONDS = 300; // 5 minutes
 
 const roundKeyFor = (lobbyId: string) => `roundEnd:${lobbyId || 'global'}`;
+const roundDurationKeyFor = (lobbyId: string) => `roundDuration:${lobbyId || 'global'}`;
 
-function ensureRoundEndTimestamp(lobbyId: string): number {
+function ensureRoundEndTimestamp(lobbyId: string, roundSeconds: number): number {
   const key = roundKeyFor(lobbyId);
+  const durationKey = roundDurationKeyFor(lobbyId);
   const now = Date.now();
   const existing = localStorage.getItem(key);
-  if (existing) {
+  const storedDuration = parseInt(localStorage.getItem(durationKey) ?? '', 10);
+  if (existing && storedDuration === roundSeconds) {
     const ts = parseInt(existing, 10);
     if (!isNaN(ts) && ts > now) return ts;
   }
-  const newTs = now + ROUND_SECONDS * 1000;
+  const newTs = now + roundSeconds * 1000;
   localStorage.setItem(key, newTs.toString());
+  localStorage.setItem(durationKey, roundSeconds.toString());
   return newTs;
 }
 
@@ -107,6 +110,7 @@ export default function DescriberPage() {
 
   const lobbyId = state?.lobbyId || sessionStorage.getItem('lobbyId') || '';
   const { name: username } = useLobbyName('');
+  const [roundSeconds, setRoundSeconds] = useState<number>(300);
 
   // Log the players received from navigation
   useEffect(() => {
@@ -242,22 +246,41 @@ export default function DescriberPage() {
     position: 'relative',
   };
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!lobbyId) return;
+      try {
+        const details = await api.getLobbyDetails(lobbyId);
+        if (mounted && details?.mode?.roundSeconds) {
+          setRoundSeconds(details.mode.roundSeconds);
+        }
+      } catch {
+        // keep default if lookup fails
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [lobbyId]);
+
   const [secondsLeft, setSecondsLeft] = useState<number>(() => {
-    const ts = ensureRoundEndTimestamp(lobbyId);
+    const ts = ensureRoundEndTimestamp(lobbyId, roundSeconds);
     return Math.max(0, Math.ceil((ts - Date.now()) / 1000));
   });
 
   const finishTriggeredRef = useRef<boolean>(false);
 
   useEffect(() => {
-    const ts = ensureRoundEndTimestamp(lobbyId);
+    const ts = ensureRoundEndTimestamp(lobbyId, roundSeconds);
     setSecondsLeft(Math.max(0, Math.ceil((ts - Date.now()) / 1000)));
 
     const key = roundKeyFor(lobbyId);
 
     const tick = () => {
       const stored = localStorage.getItem(key);
-      const end = stored ? parseInt(stored, 10) : ensureRoundEndTimestamp(lobbyId);
+      const end = stored ? parseInt(stored, 10) : ensureRoundEndTimestamp(lobbyId, roundSeconds);
       const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
       setSecondsLeft(left);
     };
@@ -278,7 +301,7 @@ export default function DescriberPage() {
       window.clearInterval(intervalId);
       window.removeEventListener('storage', onStorage);
     };
-  }, [lobbyId]);
+  }, [lobbyId, roundSeconds]);
 
   useEffect(() => {
     if (secondsLeft !== 0 || finishTriggeredRef.current) return;

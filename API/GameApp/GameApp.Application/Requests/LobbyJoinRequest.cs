@@ -10,4 +10,6 @@ public class LobbyJoinRequest
 
     public required int IconId { get; set; }
 
+    // optional: requested game mode preset name (standard, short, long, multiplayer)
+    public string? GameMode { get; set; }
 }

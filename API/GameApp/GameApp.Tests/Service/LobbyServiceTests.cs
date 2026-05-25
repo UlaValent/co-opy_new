@@ -1,15 +1,14 @@
-using GameApp.Application.Controllers;
-using GameApp.Application.LobbySystem;
-using GameApp.Application.Service;
-using GameApp.Application.Data;
-using GameApp.Application.Utils;
+using Moq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using GameApp.Application.Service.Exceptions;
+using GameApp.Integration.Data;
+using GameApp.Service.Exceptions;
+using GameApp.Service.Models;
+using GameApp.Service.Services;
+using GameApp.Service.Utils;
 using Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
-using GameApp.Application.Models;
-using Microsoft.AspNetCore.Mvc.Testing;
+using GameApp.Service.Dtos;
 
 namespace GameApp.Tests.Service;
 
@@ -43,7 +42,9 @@ public class LobbyServiceTests : IDisposable
 
     private LobbyService CreateService()
     {
-        return new LobbyService(_mockGallery.Object, _dbFactory, _mockCodeGenerator.Object, _mockLogger.Object);
+        var lobbyRepository = new EfLobbyRepository(_dbFactory);
+        var playerRepository = new EfPlayerRepository(_dbFactory);
+        return new LobbyService(_mockGallery.Object, lobbyRepository, playerRepository, _mockCodeGenerator.Object, _mockLogger.Object);
     }
 
     [Fact]

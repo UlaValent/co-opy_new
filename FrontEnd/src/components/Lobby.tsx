@@ -23,6 +23,7 @@ export default function Lobby() {
     const [players, setPlayers] = useState<PlayerItem[]>([]);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [myRole, setMyRole] = useState<string | null>(null);
+    const [maxPlayers, setMaxPlayers] = useState(2);
 
     // Use a ref to track the latest players state for event handlers
     const playersRef = useRef<PlayerItem[]>([]);
@@ -202,6 +203,26 @@ export default function Lobby() {
         // no auto-start here; we'll start when needed
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lobbyId, name, iconId, navigate, location]);
+
+    useEffect(() => {
+        let mounted = true;
+        (async () => {
+            const code = lobbyId || (location as any)?.state?.lobbyCode || "";
+            if (!code) return;
+            try {
+                const details = await api.getLobbyDetails(code);
+                if (mounted && details?.mode?.maxPlayers) {
+                    setMaxPlayers(details.mode.maxPlayers);
+                }
+            } catch {
+                // keep default if details cannot be loaded
+            }
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, [lobbyId, location]);
 
     // helper to fetch authoritative players list from server and apply it
     const refreshPlayersFromServer = async (code: string) => {
@@ -470,7 +491,7 @@ export default function Lobby() {
 
                 {/* Players header */}
                 <div style={{ marginTop: 18 }}>
-                    <div style={headerStyle}>Players {players.length}/2</div>
+                    <div style={headerStyle}>Players {players.length}/{maxPlayers}</div>
 
                     {/* Player list - centered pill rows */}
                     {players.map((p) => {

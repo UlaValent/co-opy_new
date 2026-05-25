@@ -32,7 +32,14 @@ namespace GameApp.Application.Controllers
             var lobbyId = request.LobbyId?.ToLower() ?? string.Empty;
             if (string.IsNullOrEmpty(lobbyId))
             {
-                var lobby = _lobbiesService.CreateLobby();
+                GameMode mode = new GameMode();
+                if (!string.IsNullOrEmpty(request.GameMode))
+                {
+                    if (Enum.TryParse<GameModePreset>(request.GameMode, true, out var preset))
+                        mode = GameMode.FromPreset(preset);
+                }
+
+                var lobby = _lobbiesService.CreateLobby(mode);
                 _lobbiesService.AddPlayer(new Player(authenticatedName, request.IconId), lobby.LobbyCode);
                 return Ok(new { lobby.LobbyCode });
             }
@@ -68,6 +75,20 @@ namespace GameApp.Application.Controllers
 
             var response = new ImageResponse { Url = dto.Url, Id = dto.Id };
             return Ok(response);
+        }
+
+        [HttpGet("{lobbyId}")]
+        public ActionResult<LobbyDetailsResponse> GetLobbyDetails(string lobbyId)
+        {
+            if (!_lobbiesService.LobbyExists(lobbyId))
+                return NotFound("Lobby not found");
+
+            var lobby = _lobbiesService.GetLobby(lobbyId);
+            return Ok(new LobbyDetailsResponse
+            {
+                LobbyCode = lobby.LobbyCode,
+                Mode = lobby.Mode
+            });
         }
 
         [HttpGet("{lobbyId}/players")]
